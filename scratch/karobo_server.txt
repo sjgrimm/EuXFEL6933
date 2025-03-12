@@ -1,0 +1,53 @@
+[leutloff@max-exfl261 scratch]$ karabo-bridge-server-sim 1234
+bash: karabo-bridge-server-sim: command not found
+[leutloff@max-exfl261 scratch]$ module list
+No Modulefiles Currently Loaded.
+[leutloff@max-exfl261 scratch]$ module load exfel exfel-python
+ - EXFEL modulepath enabled
+
+Loading exfel-python/202501
+  Loading requirement: mambaforge/22.11
+[leutloff@max-exfl261 scratch]$ module list
+Currently Loaded Modulefiles:
+ 1) exfel   2) mambaforge/22.11   3) exfel-python/202501  
+
+Key:
+default-version  auto-loaded  
+[leutloff@max-exfl261 scratch]$ squeue -u leutloff
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+          13384443      upex spawner- leutloff  R      34:40      1 max-exfl261
+[leutloff@max-exfl261 scratch]$ karabo-bridge-server-sim 1234
+Simulated Karabo-bridge server started on:
+tcp://max-exfl261.desy.de:1234
+Sent 50 trains in 2671.32 seconds (0.02 Hz)
+Sent 50 trains in 346.23 seconds (0.14 Hz)
+Sent 50 trains in 28.77 seconds (1.74 Hz)
+[leutloff@max-exfl261 scratch]$ karabo-bridge-server-sim 1234
+bash: karabo-bridge-server-sim: command not found
+[leutloff@max-exfl261 scratch]$ module list
+No Modulefiles Currently Loaded.
+[leutloff@max-exfl261 scratch]$ module load exfel exfel-python
+ - EXFEL modulepath enabled
+
+Loading exfel-python/202501
+  Loading requirement: mambaforge/22.11
+[leutloff@max-exfl261 scratch]$ module list
+Currently Loaded Modulefiles:
+ 1) exfel   2) mambaforge/22.11   3) exfel-python/202501  
+
+Key:
+default-version  auto-loaded  
+[leutloff@max-exfl261 scratch]$ squeue -u leutloff
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+          13384443      upex spawner- leutloff  R      34:40      1 max-exfl261
+[leutloff@max-exfl261 scratch]$ karabo-bridge-server-sim 1234
+Simulated Karabo-bridge server started on:
+tcp://max-exfl261.desy.de:1234
+Sent 50 trains in 2671.32 seconds (0.02 Hz)
+Sent 50 trains in 346.23 seconds (0.14 Hz)
+Sent 50 trains in 28.77 seconds (1.74 Hz)
+stop
+q
+^C
+Stopped.
+[leutloff@max-exfl261 scratch]$ 
