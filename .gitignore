@@ -2,3 +2,4 @@ generatorpipeline/
 scratch/generatorpipeline/
 *.ipynb_checkpoints
 *.pyc
+*.ipynb
