@@ -9,11 +9,12 @@ Created on Friday 28.02.2025
 '''
 
 import sys
-sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/scratch')
+sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import data_helper as dh
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/generatorpipeline')
-from generatorpipeline.generatorpipeline import accumulators as acc
+import generatorpipeline.accumulators as acc
 
+import pandas as pd
 import numpy as np
 from multiprocessing import Pool
 from scipy.optimize import curve_fit
@@ -21,11 +22,11 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import argparse
 
-def mask_img_ring(radius_in=0, radius_out=0.05):
+def mask_img_ring(run, radius_in=0, radius_out=0.05):
     '''
     Returns a ring mask.
     '''
-    geom = dh.getGeometry()
+    geom = dh.getGeometry(run)
     pixpos = geom.get_pixel_positions()
     px, py, pz = np.moveaxis(pixpos, -1, 0)  # Separate x, y, z coordinates
     #px.shape  # (modules, slow scan, fast scan)
@@ -81,16 +82,16 @@ def mask_stripe(run, y_lower=0, y_upper=150):
     
     return mask
 
-def calcFluorescence(run, shotN=500):
+def calcFluorescence(run, trains, shotN=250):
     '''
     Parameters
     ----------
     run : int
         The run number
         
-    border : int, optional
-        The size of the mask
-    
+    trains : list of integers
+        Contains the train_ids that should be passed to the pulse_source
+        
     shotN : int, optional
         Number of images which are should contribute to the fluorescence calculation
 
@@ -99,8 +100,10 @@ def calcFluorescence(run, shotN=500):
     Fluorescence per pulse energy of the run: float
     '''
     masks = []
-    mask = mask_img_ring()
+    mask = mask_img_ring(run)
     masks.append(mask)
+    mask_test = mask_img_ring(run, 0.05, 0.1)
+    masks.append(mask_test)
     #mask0 = mask_stripe(run, y_lower=50, y_upper=200)
     #mask1 = mask_corner(run, corner=1)
     #mask2 = mask_corner(run, corner=2)
@@ -111,7 +114,7 @@ def calcFluorescence(run, shotN=500):
     #mask7 = mask_box(run, 320, 720, 500, 600)
     #mask8 = mask_box(run, 320, 720, 800, 900)
 
-    data = dh.pulse_source(run)
+    data = dh.pulse_source(run=run, train_list=trains, flag=False)
     #pulseEnergies = dh.getPulseEnergy(tags, highTag)
     
     j=0
@@ -135,11 +138,10 @@ def calcFluorescence(run, shotN=500):
             fluorescence[i].accumulate(mean)
 
     print('Done with run {}'.format(run), flush=True)
-    if len(fluorescence[0])==0: return 0
-    if len(len(fluorescence)==1): return fluorescence[0].value
+    #if len(len(fluorescence)==1): return fluorescence[0].value
     return [accum.value for accum in fluorescence]
 
-def findFocus(run_list, start_run, num_run, energy, save=False):
+def z_scan_fluorescence(run, att, energy, pos_list, train_list, save=False):
     '''
     Parameters
     ----------
@@ -150,96 +152,124 @@ def findFocus(run_list, start_run, num_run, energy, save=False):
     -------
     np.ndarray that contains the fluorescence corresponding to the runs
     '''
+    parameter = []
+    for trains in train_list:
+        parameter.append([run, trains])
     
-    with Pool(len(run_list), maxtasksperchild=1) as pool:
-        results = pool.map(calcFluorescence, run_list)
+    with Pool(len(pos_list), maxtasksperchild=1) as pool:
+        results = pool.starmap(calcFluorescence, parameter)
     
     mean_fluorescence = np.asarray(results, dtype=object)
+    print(np.shape(mean_fluorescence))
+
+    ret_dict = {}
+    ret_dict['injector_pos'] = pos_list
+    for i in range(np.shape(mean_fluorescence)[1]):
+        ret_dict['f_yield_ROI{}'.format(i)] = mean_fluorescence[:,i]
+    
+    df = pd.DataFrame(ret_dict)
 
     if save:
         path = dh.expPath+'Results/FocusScans/Data/'
-        np.save(path+'fyield_{}eV_r{}_r{}_ROIs'.format(energy, start_run, start_run+num_run-1), mean_fluorescence)
+        df.to_hdf(path+'fyield_r{}_att{}_{}eV_ROIs'.format(dh.run_format(run), att, energy), key='f_yield')
 
-    print('DONE!', flush=True)
+    print('DONE with z_scan for {} eV!'.format(energy), flush=True)
     
-    return mean_fluorescence
+    return df
 
 def Gauss(x, a, center, sigma, c):
     return a * np.exp(-((x-center)**2)/(2*sigma**2) ) + c
 
-def fitFocus_scipy(target_thickness, scanned_fyield, start_run, num_run, filename_ext, save=False, fit=False, energy=None):
+def find_focus_scipy(run, att, energy, df_fluorescence, save=False, fit=False):
     '''
     Parameters
     ----------
-    target_thickness : nm
-    ys : array-like
-        List of y positions
-
+    target_thickness : int
+        Nanoparticle size in nm
+        
+    z_s : array-like
+        List of z positions
+        
     scanned_fyield : array-like
-        Fluorescence at the y positions
+        Fluorescence at the z positions
         
     Returns
     -------
     np.ndarray that contains the fluorescence corresponding to the runs
     '''
-
-    if energy is None:
-        energy=dh.getPhotonEnergy(start_run)
-    #attn = dh.getAttenuatorSiliconThickness(tags[0], highTag)
-
-    zs = []
-    for i in range(start_run, start_run+num_run):
-        prof_y_position=
-        zs.append(prof_y_position[0])
+    z_s = df_fluorescence['injector_pos'].to_numpy()
+    for i in range(df_fluorescence.shape[1]-1):
+        scanned_fyield = df_fluorescence['f_yield_ROI{}'.format(i)].to_numpy()
     
-    data = np.stack([ys, scanned_fyield])
-    data = data[:,data[0].argsort()]
-
-    if fit:
-        p,c=curve_fit(Gauss, data[0], data[1], 
-                      bounds=([0.001,
-                               np.max([ys[np.argmax(scanned_fyield)]-5e2, np.min(ys)]),   2,  0], 
-                              [np.max(scanned_fyield)*2, 
-                               np.min([ys[np.argmax(scanned_fyield)]+5e2, np.max(ys)]), 500, 50]))
-        x_fit = np.arange(np.min(data[0]), np.max(data[0]))
-        focus_fit = Gauss(x_fit, *p)
-
-    plt.figure(dpi=150)
-    if fit: plt.plot(x_fit, focus_fit, color='tab:orange', label='Fit')
-    plt.scatter(data[0], data[1], label='Data')
-    plt.grid()
-    plt.legend()
-    plt.xlabel(r'y position in $\mathrm{\mu}$m')
-    plt.ylabel('Fluorescence yield in photons per pixel')
-    plt.title('Au {} nm: y scan at {} eV and attn {} mm'.format(target_thickness, int(energy), attn))
-    path = dh.expPath+'Results/FocusScans/'
-    if save: plt.savefig(path+'focusScan_Au{}nm_{}eV_{}mm_r{}_r{}_ROI{}.png'.format(target_thickness, int(energy), attn, start_run, start_run+num_run-1, str(filename_ext)))
-    plt.show()
+        data = np.stack([z_s, scanned_fyield])
+        data = data[:,data[0].argsort()]
+    
+        if fit:
+            p,c=curve_fit(Gauss, data[0], data[1], 
+                          bounds=([0.001,
+                                   np.max([z_s[np.argmax(scanned_fyield)]-5e2, np.min(z_s)]),   2,  0], 
+                                  [np.max(scanned_fyield)*2, 
+                                   np.min([z_s[np.argmax(scanned_fyield)]+5e2, np.max(z_s)]), 500, 50]))
+            x_fit = np.arange(np.min(data[0]), np.max(data[0]))
+            focus_fit = Gauss(x_fit, *p)
+    
+        plt.figure(dpi=150)
+        if fit: plt.plot(x_fit, focus_fit, color='tab:orange', label='Fit')
+        plt.scatter(data[0], data[1], label='Data')
+        plt.grid()
+        plt.legend()
+        plt.xlabel(r'z position in mm')#$\mathrm{\mu}$m')
+        plt.ylabel('Fluorescence yield in photons per pixel')
+        plt.title('Run {0:}: y scan at {1:} eV and {2:.2%} transmission'.format(run, energy, att))
+        path = dh.expPath+'Results/FocusScans/'
+        if save: 
+            plt.savefig(path+'focusScan_r{0:}_{1:.2%}_{2:}eV_ROI{3:}.png'.format(dh.run_format(run), att, energy, i))
+        plt.show()
     
     return
 
 #========================================================================================================================
 
-def main():
+def main(run=None):
 
-    parser = argparse.ArgumentParser(description='Ein Beispiel-Skript zum Parsen von Parametern.')
-
-    parser.add_argument('--run', type=int, required=True, help='Run number')
-    parser.add_argument('--energy', type=int, required=True, help='Energy')
-    parser.add_argument('--thickness', type=int, required=True, help='Target thickness')
-
-    args = parser.parse_args()
-    run = args.run
-    energy = args.energy
-    target_thickness = args.thickness
-    
-    fluorescence_list = findFocus(run_list, start_run, num_run, energy, save=True)
-
-    if np.ndim(fluorescence_list)==1:
-        fitFocus_scipy(target_thickness, fluorescence_list, start_run, num_run, 0, save=True, energy=energy)
+    if run is not None:
+        run = run
     else:
-        for i in range(np.ndim(fluorescence_list)):
-            fitFocus_scipy(target_thickness, fluorescence_list[:,i], start_run, num_run, i, save=True, energy=energy)
+        parser = argparse.ArgumentParser(description='Ein Beispiel-Skript zum Parsen von Parametern.')
+    
+        parser.add_argument('--run', type=int, required=True, help='Run number')
+        
+        args = parser.parse_args()
+        run = args.run
+        
+    df_e = dh.getPhotonEnergy_trainwise(run)
+    df_p = dh.getInjectorPos_trainwise(run, axis='x')
+    df_att = dh.getTransmission_trainwise(run)
+    df = pd.merge(df_e, df_p, on='trainId', how='inner')
+    df = pd.merge(df, df_att, on='trainId', how='inner')
+
+    for att in df['total_transmission'].unique():
+        df_att = df[df['total_transmission']==att]
+        
+        for energy in df_att['photon_energy'].unique():
+            df_e = df_att[df_att['photon_energy']==energy]
+
+            pos_list = df_e['injector_pos'].unique()
+            train_list = []
+            
+            for pos in pos_list:
+                train_array = df_e[df_e['injector_pos']==pos]['trainId'].to_numpy()
+
+                size = train_array.size
+                middle = size//2
+                lower = middle-1 if middle-1>0 else 0
+                upper = middle+2 if middle+2<size else size
+                tmp = train_array[lower:upper]
+                train_list.append(tmp)
+                print(train_array[middle], tmp)
+
+            df_fluorescence = z_scan_fluorescence(run, att, energy, pos_list, train_list, save=True)
+            find_focus_scipy(run, att, energy, df_fluorescence, save=True)
     
     return
 
