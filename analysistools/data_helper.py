@@ -310,7 +310,7 @@ def getPulseEnergy_trainwise(run, xgm='xgm9', flags=False, trainList=None):
     '''
     if flags:
         flag_array=ds[dh.det['hitfinder'], 'data.hitFlag'].xarray()
-    pulse_energies=getpulseEnergy(run, xgm=xgm)
+    pulse_energies=getPulseEnergy(run, xgm=xgm)
     for t_id in pulse_energies.coords['trainId'].values if trainList is None else trainList:
         pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
         if flags:
