@@ -295,7 +295,7 @@ def getPulseEnergy(run, xgm='xgm9'):
     a xarray with the pulse energy for the 
     to access one trainId t_id: data.sel(trainId=t_id)
     '''
-    data = ex.open_run(propsal, run)
+    data = ex.open_run(proposal, run)
     xgm_field = dh.det[xgm]
     intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
     filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
