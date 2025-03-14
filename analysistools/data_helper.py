@@ -190,8 +190,10 @@ def pulse_source(run, train_list=None, flag=True, verbose=False):
                 stacked_dict = stack_agipd_dict(t_data)
                 images = stacked_dict['image.data']
                 pulseIDs = stacked_dict['image.pulseId']
+                print(t_id, flush=True)
                 for flag, p_id, image in zip(flags, pulseIDs, images):
-                    if flag==0: continue
+                    if flag==0: continue 
+                    else: print(flag)
                     yield t_id, p_id, image
         else:
             for t_id, t_data in data:
@@ -204,12 +206,9 @@ def pulse_source(run, train_list=None, flag=True, verbose=False):
         ds = data_source(run)
         elements = []
         for key in det_image.keys():
-            try:
-                ds.select(det_image[key])
-                elements.append(det_image[key])
-            except: 
-                print(f"{key} not detected")
+            elements.append(det_image[key])
         sel = ds.select(elements, require_all=True)
+
 
         if flag:
             for t_id in train_list:
@@ -289,20 +288,20 @@ def getPhotonEnergy(run):
     energy = sel[det['undulator_e'], 'actualPosition'].drop_empty_trains()[0].ndarray()[0] * 1e3 + e_offset
     return int(np.round(energy, 0))
 
-def pulse_energy(run, xgm='xgm9'):
+def getPulseEnergy(run, xgm='xgm9'):
     '''
     returns 
     ----------
     a xarray with the pulse energy for the 
     to access one trainId t_id: data.sel(trainId=t_id)
     '''
-    data = ex.open_run(6933, run)
+    data = ex.open_run(propsal, run)
     xgm_field = dh.det[xgm]
     intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
     filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
     return filtered_intensity
 
-def pulse_energy_train(run, xgm='xgm9', flags=False):
+def getPulseEnergy_trainwise(run, xgm='xgm9', flags=False, trainList=None):
     '''
     returns 
     ----------
@@ -311,8 +310,8 @@ def pulse_energy_train(run, xgm='xgm9', flags=False):
     '''
     if flags:
         flag_array=ds[dh.det['hitfinder'], 'data.hitFlag'].xarray()
-    pulse_energies=pulse_energy(run, xgm=xgm)
-    for t_id in pulse_energies.coords['trainId'].values:
+    pulse_energies=getpulseEnergy(run, xgm=xgm)
+    for t_id in pulse_energies.coords['trainId'].values if trainList is None else trainList:
         pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
         if flags:
             mask = flag_array.sel(trainId=t_id)
@@ -389,9 +388,9 @@ def getFlags(run):
     The flags of the run.
     '''
     ds = dh.data_source(run)
-    sel = ds.select([(dh.det['hitfinder'], 'data.hitFlag')], require_all=True)
-    df = sel.get_dataframe()
-    df = df.rename(columns={df.columns[0]: 'flags'})
+    sel = ds.select([dh.det['hitfinder']], require_all=True)
+    df = sel.get_dataframe(fields=[(dh.det['hitfinder'], 'data.hitFlag'), (dh.det['hitfinder'], 'data.pulseId')])
+    df = df.rename(columns={df.columns[0]: 'pulseId', df.columns[1]: 'flags'})
     df = df.reset_index()
     return df
 
@@ -463,7 +462,6 @@ def stack_agipd_dict(train_data: dict):
     stacked_imgs_agipd=ex.stack_detector_data(train=temp_dct,
                                               data='image.data',
                                               pattern='SPB_DET_AGIPD1M-1/CORR/(\d+)CH0:output')
-    
     pulseIds = train_data['SPB_DET_AGIPD1M-1/CORR/0CH0:output']['image.pulseId']
     trainId = train_data['SPB_DET_AGIPD1M-1/CORR/0CH0:output']['image.trainId'][0]
     ret={'image.data' :stacked_imgs_agipd , 'image.pulseId':pulseIds ,  'image.trainId':trainId }
