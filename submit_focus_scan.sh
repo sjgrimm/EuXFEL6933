@@ -3,7 +3,7 @@
 #SBATCH --partition=upex
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=32
 #SBATCH --mem=64GB
 #SBATCH --output=/gpfs/exfel/exp/SPB/202501/p006933/scratch/Logs/log_focusscan/job_%A_%a.out
 #SBATCH --error=/gpfs/exfel/exp/SPB/202501/p006933/scratch/Logs/log_focusscan/job_%A_%a.err

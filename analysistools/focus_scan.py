@@ -57,14 +57,22 @@ def mask_corner(run, corner, border=150):
     
     return mask
 
-def mask_box(run, x_min, x_max, y_min, y_max):
-
-    data = dh.data_source(run)
-    img, tag = next(data)
-    y_s, x_s = img.shape
-    mask = np.zeros((y_s, x_s), dtype=int)
-
-    mask[y_min:y_max, x_min:x_max]=1
+def mask_box():
+    '''
+    12 | 0
+    13 | 1
+    14 | 2
+    15 | 3
+    ---+---
+     8 | 4
+     9 | 5
+    10 | 6
+    11 | 7
+    '''
+    
+    mask = np.zeros((16, 512, 128))
+    mask[1][0:128, 0:128]=1
+    mask[10][0:128, 0:128]=1
 
     return mask
 
@@ -100,10 +108,8 @@ def calcFluorescence(run, trains, shotN=250):
     Fluorescence per pulse energy of the run: float
     '''
     masks = []
-    mask = mask_img_ring(run)
+    mask = mask_box()
     masks.append(mask)
-    mask_test = mask_img_ring(run, 0.05, 0.1)
-    masks.append(mask_test)
     #mask0 = mask_stripe(run, y_lower=50, y_upper=200)
     #mask1 = mask_corner(run, corner=1)
     #mask2 = mask_corner(run, corner=2)
@@ -128,7 +134,7 @@ def calcFluorescence(run, trains, shotN=250):
         #pulseEnergy = pulseEnergies[i]
         #if pulseEnergy==float('nan') or pulseEnergy==0: continue
         
-        if np.sum(img>dh.f_threshold)<50: continue
+        if np.sum(img>dh.f_threshold)<150: continue
         img[img<0]=0 # warum?
         
         j+=1
@@ -159,10 +165,12 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, save=False):
     with Pool(len(pos_list), maxtasksperchild=1) as pool:
         results = pool.starmap(calcFluorescence, parameter)
     
-    mean_fluorescence = np.asarray(results, dtype=object)
+    mean_fluorescence = np.asarray(results, dtype=float)
     print(np.shape(mean_fluorescence))
 
     ret_dict = {}
+    ret_dict['transmission'] = att
+    ret_dict['photon_energy'] = energy
     ret_dict['injector_pos'] = pos_list
     for i in range(np.shape(mean_fluorescence)[1]):
         ret_dict['f_yield_ROI{}'.format(i)] = mean_fluorescence[:,i]
@@ -171,7 +179,7 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, save=False):
 
     if save:
         path = dh.expPath+'Results/FocusScans/Data/'
-        df.to_hdf(path+'fyield_r{}_att{}_{}eV_ROIs'.format(dh.run_format(run), att, energy), key='f_yield')
+        df.to_hdf(path+'fyield_r{}_att{}_{}eV_ROIs.h5'.format(dh.run_format(run), att, energy), key='f_yield')
 
     print('DONE with z_scan for {} eV!'.format(energy), flush=True)
     
@@ -198,7 +206,7 @@ def find_focus_scipy(run, att, energy, df_fluorescence, save=False, fit=False):
     np.ndarray that contains the fluorescence corresponding to the runs
     '''
     z_s = df_fluorescence['injector_pos'].to_numpy()
-    for i in range(df_fluorescence.shape[1]-1):
+    for i in range(df_fluorescence.shape[1]-3):
         scanned_fyield = df_fluorescence['f_yield_ROI{}'.format(i)].to_numpy()
     
         data = np.stack([z_s, scanned_fyield])
@@ -220,7 +228,7 @@ def find_focus_scipy(run, att, energy, df_fluorescence, save=False, fit=False):
         plt.legend()
         plt.xlabel(r'z position in mm')#$\mathrm{\mu}$m')
         plt.ylabel('Fluorescence yield in photons per pixel')
-        plt.title('Run {0:}: y scan at {1:} eV and {2:.2%} transmission'.format(run, energy, att))
+        plt.title('Run {0:}: z scan at {1:} eV and {2:.2%} transmission'.format(run, energy, att))
         path = dh.expPath+'Results/FocusScans/'
         if save: 
             plt.savefig(path+'focusScan_r{0:}_{1:.2%}_{2:}eV_ROI{3:}.png'.format(dh.run_format(run), att, energy, i))
@@ -243,7 +251,7 @@ def main(run=None):
         run = args.run
         
     df_e = dh.getPhotonEnergy_trainwise(run)
-    df_p = dh.getInjectorPos_trainwise(run, axis='x')
+    df_p = dh.getInjectorPos_trainwise(run)
     df_att = dh.getTransmission_trainwise(run)
     df = pd.merge(df_e, df_p, on='trainId', how='inner')
     df = pd.merge(df, df_att, on='trainId', how='inner')

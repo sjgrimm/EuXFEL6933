@@ -50,7 +50,7 @@ proposal = 6933
 # Sources and constants #
 #########################
 
-f_threshold = 1
+f_threshold = 0
 e_offset = 120
 
 det = {
@@ -68,6 +68,7 @@ det = {
     #'inj_cam_down': 'SPB_EXP_ZYLA/CAM/1:daqOutput',              # Injector nozzle camera
     #'inj_cam_up': 'SPB_IRU_AEROSOL/CAM/CAM_1:daqOutput',         # Injector nozzle camera
     'hitfinder': 'SPB_DET_AGIPD1M-1/REDU/SPI_HITFINDER:output',  # Flags the hits
+    'frames': 'SPB_IRU_AGIPD1M1/REDU/LITFRM:output',
     #'test1': 'SPB_EHD_IBS/CAM/1:daqOutput',             # doesn't work
     #'test3': 'SPB_IRU_AGIPD1M1/REDU/LITFRM:output',     # weird
     #'test4': 'ACC_SYS_DOOCS/CTRL/BEAMCONDITIONS'        # kParameter
@@ -160,6 +161,7 @@ def fast_data_source(run, verbose=False):
     Not implemented yet!
     '''
     return 
+
 
 def pulse_source(run, train_list=None, flag=True, verbose=False):
     '''
@@ -287,6 +289,38 @@ def getPhotonEnergy(run):
     energy = sel[det['undulator_e'], 'actualPosition'].drop_empty_trains()[0].ndarray()[0] * 1e3 + e_offset
     return int(np.round(energy, 0))
 
+def pulse_energy(run, xgm='xgm9'):
+    '''
+    returns 
+    ----------
+    a xarray with the pulse energy for the 
+    to access one trainId t_id: data.sel(trainId=t_id)
+    '''
+    data = ex.open_run(6933, run)
+    xgm_field = dh.det[xgm]
+    intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
+    filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
+    return filtered_intensity
+
+def pulse_energy_train(run, xgm='xgm9', flags=False):
+    '''
+    returns 
+    ----------
+    a generator that gives the pulse_energy for trains using pulse_energy(run, xgm='xgm9') and data.sel(trainId=t_id).
+    Only exist as an option to directly apply the hitfinderflag when flags=True
+    '''
+    if flags:
+        flag_array=ds[dh.det['hitfinder'], 'data.hitFlag'].xarray()
+    pulse_energies=pulse_energy(run, xgm=xgm)
+    for t_id in pulse_energies.coords['trainId'].values:
+        pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
+        if flags:
+            mask = flag_array.sel(trainId=t_id)
+            mask=mask.rename({'trainId':'dim_0'})
+            yield pulse_energies_train.where(mask).dropna(dim='dim_0')
+        else:
+            yield pulse_energies_train
+
 def getInjectorPos_trainwise(run, axis='z'):
     '''
     Parameters
@@ -348,8 +382,43 @@ def getTransmission_trainwise(run):
     df = df.reset_index()
     return df
 
+def getFlags(run):
+    '''
+    Returns
+    -------
+    The flags of the run.
+    '''
+    ds = dh.data_source(run)
+    sel = ds.select([(dh.det['hitfinder'], 'data.hitFlag')], require_all=True)
+    df = sel.get_dataframe()
+    df = df.rename(columns={df.columns[0]: 'flags'})
+    df = df.reset_index()
+    return df
+
+def pulse_source_trainwise_modulewise(run, modules=[], trainlist=None):
+    ds = data_source(run)
+    df = getFlags(run)
+    sel = ds.select(['SPB_DET_AGIPD1M-1/CORR/{}CH0:output'.format(i) for i in modules], require_all=True)
+    for train in trainlist: 
+        t_id, t_data = sel.train_by_id(train)
+        flags = df[df['trainId']==t_id]['flags'].to_numpy()
+        tmp = [t_data['SPB_DET_AGIPD1M-1/CORR/{}CH0:output'.format(i)]['image.data'] for i in modules]
+        tmp = np.asarray(tmp).transpose(1, 0, 2, 3)
+        tmp = np.array([tmp[i,:,:,:] for i, flag in enumerate(flags) if flag == 1])
+        yield t_id, tmp
+
 def getGeometry(run):
     '''
+    12 | 0
+    13 | 1
+    14 | 2
+    15 | 3
+    ---+---
+     8 | 4
+     9 | 5
+    10 | 6
+    11 | 7
+
     Parameter
     ---------
     run : int
@@ -359,7 +428,6 @@ def getGeometry(run):
     -------
     The detector geometry object which is corrected for the given run 
     '''
-    
     geom_fn = expPath+"Shared/geom/agipd_p008039_r0014_v16.geom"
     ref_geom = AGIPD_1MGeometry.from_crystfel_geom(geom_fn)
 
