@@ -296,7 +296,7 @@ def getPulseEnergy(run, xgm='xgm9'):
     to access one trainId t_id: data.sel(trainId=t_id)
     '''
     data = ex.open_run(proposal, run)
-    xgm_field = dh.det[xgm]
+    xgm_field = det[xgm]
     intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
     filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
     return filtered_intensity
@@ -309,7 +309,7 @@ def getPulseEnergy_trainwise(run, xgm='xgm9', flags=False, trainList=None):
     Only exist as an option to directly apply the hitfinderflag when flags=True
     '''
     if flags:
-        flag_array=ds[dh.det['hitfinder'], 'data.hitFlag'].xarray()
+        flag_array=ds[det['hitfinder'], 'data.hitFlag'].xarray()
     pulse_energies=getPulseEnergy(run, xgm=xgm)
     for t_id in pulse_energies.coords['trainId'].values if trainList is None else trainList:
         pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
@@ -387,9 +387,9 @@ def getFlags(run):
     -------
     The flags of the run.
     '''
-    ds = dh.data_source(run)
-    sel = ds.select([dh.det['hitfinder']], require_all=True)
-    df = sel.get_dataframe(fields=[(dh.det['hitfinder'], 'data.hitFlag'), (dh.det['hitfinder'], 'data.pulseId')])
+    ds = data_source(run)
+    sel = ds.select([det['hitfinder']], require_all=True)
+    df = sel.get_dataframe(fields=[(det['hitfinder'], 'data.hitFlag'), (det['hitfinder'], 'data.pulseId')])
     df = df.rename(columns={df.columns[0]: 'pulseId', df.columns[1]: 'flags'})
     df = df.reset_index()
     return df
