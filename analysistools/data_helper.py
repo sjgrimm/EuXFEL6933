@@ -397,10 +397,11 @@ def getFlags(run):
     df = sel.get_dataframe(fields=[(det['hitfinder'], 'data.hitscore'), 
                                    (det['hitfinder'], 'data.hitFlag'), 
                                    (det['hitfinder'], 'data.pulseId')])
-    df = df.rename(columns={df.columns[0]: 'pulseId', 
-                            df.columns[1]: 'hitscore', 
-                            df.columns[2]: 'flags'})
+    df = df.rename(columns={det['hitfinder']+'/data.pulseId': 'pulseId', 
+                            det['hitfinder']+'/data.hitscore': 'hitscore', 
+                            det['hitfinder']+'/data.hitFlag': 'flags'})
     df = df.reset_index()
+    df.sort_values(by=['trainId', 'pulseId'])
     return df
 
 def pulse_source_trainwise_modulewise(run, modules=[], trainlist=None):
