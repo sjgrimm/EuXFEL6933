@@ -401,7 +401,7 @@ def getFlags(run):
                             det['hitfinder']+'/data.hitscore': 'hitscore', 
                             det['hitfinder']+'/data.hitFlag': 'flags'})
     df = df.reset_index()
-    df.sort_values(by=['trainId', 'pulseId'])
+    df = df.sort_values(by=['trainId', 'pulseId'])
     return df
 
 def pulse_source_trainwise_modulewise(run, modules=[], trainlist=None):
