@@ -208,12 +208,16 @@ def pulse_source(run, train_list=None, flag=True, verbose=False):
         for key in det_image.keys():
             elements.append(det_image[key])
         sel = ds.select(elements, require_all=True)
+        sel_flag = ds.select([det['hitfinder']], require_all=True)
 
 
         if flag:
             for t_id in train_list:
+                t_id, flag_data = sel_flag.train_from_id(t_id)
+                flags = flag_data[det['hitfinder']]['data.hitFlag']
+                if len(np.where(flags==1)[0])==0: continue
+                    
                 t_id, t_data = sel.train_from_id(t_id)
-                flags = t_data[det['hitfinder']]['data.hitFlag']
                 stacked_dict = stack_agipd_dict(t_data)
                 images = stacked_dict['image.data']
                 pulseIDs = stacked_dict['image.pulseId']
@@ -301,13 +305,14 @@ def getPulseEnergy(run, xgm='xgm9'):
     filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
     return filtered_intensity
 
-def getPulseEnergy_trainwise(run, xgm='xgm9', flags=False, trainList=None):
+def getPulseEnergy_trainwise(run, xgm='xgm9', flags=True, trainList=None):
     '''
     returns 
     ----------
     a generator that gives the pulse_energy for trains using pulse_energy(run, xgm='xgm9') and data.sel(trainId=t_id).
     Only exist as an option to directly apply the hitfinderflag when flags=True
     '''
+    ds = data_source(run)
     if flags:
         flag_array=ds[det['hitfinder'], 'data.hitFlag'].xarray()
     pulse_energies=getPulseEnergy(run, xgm=xgm)
@@ -389,8 +394,12 @@ def getFlags(run):
     '''
     ds = data_source(run)
     sel = ds.select([det['hitfinder']], require_all=True)
-    df = sel.get_dataframe(fields=[(det['hitfinder'], 'data.hitFlag'), (det['hitfinder'], 'data.pulseId')])
-    df = df.rename(columns={df.columns[0]: 'pulseId', df.columns[1]: 'flags'})
+    df = sel.get_dataframe(fields=[(det['hitfinder'], 'data.hitscore'), 
+                                   (det['hitfinder'], 'data.hitFlag'), 
+                                   (det['hitfinder'], 'data.pulseId')])
+    df = df.rename(columns={df.columns[0]: 'pulseId', 
+                            df.columns[1]: 'hitscore', 
+                            df.columns[2]: 'flags'})
     df = df.reset_index()
     return df
 
@@ -508,3 +517,46 @@ def run_format(run):
     The formated run number.
     '''
     return '{0:04d}'.format(run)
+
+def mask_full_flour(bad=False):
+    '''
+    Parameter
+    ---------
+    bad : bool, optional
+        If True only the bad pixel mask is returned.
+        Otherwise (default: False) the mask for the fluorescence is returned.
+
+    Returns
+    -------
+    The mask for the fluorescence or the bad pixels (shape: 16, 512, 128).
+
+    Module layout:
+        
+    plot_data:  12 | 0   imshow:  7 | 11
+                13 | 1            6 | 10
+                14 | 2            5 |  9
+                15 | 3            4 |  8
+                ---+---          ---+---
+                 8 | 4            3 | 15
+                 9 | 5            2 | 14
+                10 | 6            1 | 13
+                11 | 7            0 | 12
+    '''
+    import h5py
+    with h5py.File(expPath+'Shared/geom/mask_hvoff_20250311.h5', 'r') as f:
+        bad_pixel = f['entry_1/data_1/mask'][:].astype(bool)
+
+    if not bad:
+        mask = np.zeros((16, 512, 128))
+        mask[7][64:192, 0:128]=1
+        mask[7][256:512, 0:128]=1
+        mask[1][0:128, 0:128]=1
+        mask[10][0:128, 0:128]=1
+        mask[11][256:512, 0:128]=1
+        mask[12][64:192, 0:128]=1
+        mask = mask.astype(bool)
+        mask = ~bad_pixel*mask
+    else:
+        mask = ~bad_pixel
+
+    return mask
