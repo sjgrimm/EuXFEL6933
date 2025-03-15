@@ -114,7 +114,9 @@ def data_source(run, verbose=False):
             print(f"{key} not detected", flush=True)
     sel = ds.select(elements, require_all=True)
     number_of_trains = len(sel.train_ids)
-    print('{0:.2%} of the data of run {1:} is used!'.format(number_of_trains/original_number_of_trains, run), flush=True)
+    good_data_ratio = number_of_trains/original_number_of_trains
+    if good_data_ratio<0.98:
+        print('{0:.2%} of the data of run {1:} is used!'.format(good_data_ratio, run), flush=True)
     if number_of_trains==0: print('One or more sources did not collect data!', flush=True)
     return sel
     
@@ -296,13 +298,16 @@ def getPulseEnergy(run, xgm='xgm9'):
     '''
     returns 
     ----------
-    a xarray with the pulse energy for the 
-    to access one trainId t_id: data.sel(trainId=t_id)
+    The pulse energy for the given gas detector as 1d ndarray (2d xarray).
+    (The first dimension is the trainId and 
+    the second dimension is the number of pulses (not pulseId!)).
     '''
     data = ex.open_run(proposal, run)
     xgm_field = det[xgm]
-    intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
-    filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
+    #intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
+    #filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
+    intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()[:, 1:]
+    filtered_intensity = intensity[intensity != 1.0]
     return filtered_intensity
 
 def getPulseEnergy_trainwise(run, xgm='xgm9', flags=True, trainList=None):
@@ -324,6 +329,7 @@ def getPulseEnergy_trainwise(run, xgm='xgm9', flags=True, trainList=None):
             yield pulse_energies_train.where(mask).dropna(dim='dim_0')
         else:
             yield pulse_energies_train
+
 
 def getInjectorPos_trainwise(run, axis='z'):
     '''
@@ -519,7 +525,7 @@ def run_format(run):
     '''
     return '{0:04d}'.format(run)
 
-def mask_full_flour(bad=False):
+def mask_full_fluor(bad=False):
     '''
     Parameter
     ---------
