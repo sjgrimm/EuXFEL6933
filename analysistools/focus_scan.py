@@ -11,6 +11,7 @@ Created on Friday 28.02.2025
 import sys
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import data_helper as dh
+import preselecting_data as pred
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/generatorpipeline')
 import generatorpipeline.accumulators as acc
 
@@ -102,7 +103,7 @@ def mask_stripe(run, y_lower=0, y_upper=150):
     
     return mask
 
-def calcFluorescence(run, trains, df_f, flag=True, shotN=200):
+def calcFluorescence(run, trains, df_data, flag=True, shotN=200):
     '''
     Parameters
     ----------
@@ -137,10 +138,10 @@ def calcFluorescence(run, trains, df_f, flag=True, shotN=200):
     else:
         data = dh.pulse_source(run=run, train_list=trains, flag=False)
         
-    pulseEnergies = dh.getPulseEnergy_trainwise(run, flags=True, trainList=trains)
-    pulseEnergy = []
-    for pulse_e in pulseEnergies:
-        pulseEnergy.extend(pulse_e.values.tolist())
+    #pulseEnergies = dh.getPulseEnergy_trainwise(run, flags=True, trainList=trains)
+    #pulseEnergy = []
+    #for pulse_e in pulseEnergies:
+    #    pulseEnergy.extend(pulse_e.values.tolist())
     j=0
     fluorescence = []
     for _ in range(len(masks)):
@@ -149,9 +150,9 @@ def calcFluorescence(run, trains, df_f, flag=True, shotN=200):
     for i, (t_id, p_id, img) in enumerate(data):
         if j>shotN: break
 
-        pulse_energy = pulseEnergy[i]
-        
-        hitscore = df_f.loc[(df_f['trainId'] == t_id) & (df_f['pulseId'] == p_id), 'hitscore'].values[0]
+        #pulse_energy = pulseEnergy[i]
+        pulse_energy = df_data.loc[(df_data['trainId'] == t_id) & (df_data['pulseId'] == p_id), 'pulse_energy_xgm9'].values[0]
+        hitscore = df_data.loc[(df_data['trainId'] == t_id) & (df_data['pulseId'] == p_id), 'hitscore'].values[0]
         if hitscore>4000 or pulse_energy<1000: continue
         #if pulseEnergy==float('nan') or pulseEnergy==0: continue
         
@@ -168,7 +169,7 @@ def calcFluorescence(run, trains, df_f, flag=True, shotN=200):
     #if len(len(fluorescence)==1): return fluorescence[0].value
     return [accum.value for accum in fluorescence]
 
-def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_f, flag=True, save=False):
+def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_data, flag=True, save=False):
     '''
     Parameters
     ----------
@@ -181,7 +182,7 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_f, fla
     '''
     parameter = []
     for trains in train_list:
-        parameter.append([run, trains, df_f, flag, nshot])
+        parameter.append([run, trains, df_data, flag, nshot])
     
     with Pool(len(pos_list), maxtasksperchild=1) as pool:
         results = pool.starmap(calcFluorescence, parameter)
@@ -280,7 +281,9 @@ def main(run=None, flag_num=1, nshot=200):
     df_e = dh.getPhotonEnergy_trainwise(run)
     df_p = dh.getInjectorPos_trainwise(run)
     df_att = dh.getTransmission_trainwise(run)
-    df_f = dh.getFlags(run)
+    Run = pred.Run(run)
+    df_data = Run.reduced_data
+    #df_f = dh.getFlags(run)
     df = pd.merge(df_e, df_p, on='trainId', how='inner')
     df = pd.merge(df, df_att, on='trainId', how='inner')
 
@@ -377,7 +380,7 @@ def main(run=None, flag_num=1, nshot=200):
                 # Print the grouped DataFrame with the new column
                 #print(grouped_df)
 
-            df_fluorescence = z_scan_fluorescence(run, att, energy, new_pos_list, train_list, nshot, df_f, flag, save=True)
+            df_fluorescence = z_scan_fluorescence(run, att, energy, new_pos_list, train_list, nshot, df_data, flag, save=True)
             find_focus_scipy(run, att, energy, df_fluorescence, nshot, save=True)
     
     return
