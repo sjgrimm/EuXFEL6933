@@ -183,9 +183,13 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_data, 
     parameter = []
     for trains in train_list:
         parameter.append([run, trains, df_data, flag, nshot])
-    
-    with Pool(len(pos_list), maxtasksperchild=1) as pool:
-        results = pool.starmap(calcFluorescence, parameter)
+
+    if (len(pos_list)>1):
+        with Pool(len(pos_list), maxtasksperchild=1) as pool:
+            results = pool.starmap(calcFluorescence, parameter)
+
+    else:
+        results = calcFluorescence(*parameter)
     
     mean_fluorescence = np.asarray(results, dtype=float)
     print(np.shape(mean_fluorescence), flush=True)
