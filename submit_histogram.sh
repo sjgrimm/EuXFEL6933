@@ -8,11 +8,11 @@
 #SBATCH --mem=64GB
 #SBATCH --output=/gpfs/exfel/exp/SPB/202501/p006933/scratch/Logs/log_histograms/job_%A_%a.out
 #SBATCH --error=/gpfs/exfel/exp/SPB/202501/p006933/scratch/Logs/log_histograms/job_%A_%a.err
-# # SBATCH --export=ALL
+#SBATCH --export=ALL
 
 # For submitting do the following
 # # # sbatch --export=R=8 submit_histogram.sh
-# # # seq 35 99 | xargs -I{} sbatch --export=R={} submit_focus_scan.sh
+# # # seq 35 99 | xargs -I{} sbatch --export=R={} submit_histogram.sh
 
 # Default values for optional arguments
 # RUN=$R
