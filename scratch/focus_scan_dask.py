@@ -3,9 +3,9 @@ Created on Friday 15.03.2025
 
 @author: Nils Muthreich
 
-|------------------------------------------------------------------------------------------------------------------------------|
-| Try to implement the focus scan with same output format as Jans focus_scan.py with dask arrays for better performance(maybe) |
-|------------------------------------------------------------------------------------------------------------------------------|
+|--------------------------------------------------------------------------------------------------|
+| Focus scan with same output format as Jans focus_scan.py with dask arrays for better performance |
+|--------------------------------------------------------------------------------------------------|
 '''
 import xarray
 import dask
@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, progress
+from dask import delayed
 import sys
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import data_helper as dh
@@ -27,6 +28,10 @@ from extra_data.components import AGIPD1M
 from tqdm import tqdm
 import os 
 import time
+
+
+def compute_average(img, flag_dict):
+    return img.sel(flag_dict).mean('train_pulse')
 
 path = dh.expPath+'Results/FocusScans/DataDask/'
 
@@ -75,32 +80,33 @@ class Analysis:
         self.nshot = nshot
         self.df_flags = df_flags
         self.flag=flag
-        self._average = None
+        self._img_dask = None
+        self._filter_dicts = None
 
-    def create_filterdict(self, train_list):
-        result=[]
-        used_shots=0
-        for t_id in train_list:
-            if used_shots>=self.nshot: break
-            train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
-            if len(train_df) >= self.nshot-used_shots: selected_entries = train_df.head(self.nshot-used_shots)
-            else: selected_entries = train_df
-            for _, row in selected_entries.iterrows():
-                result.append((row['trainId'], row['pulseId']))
-            used_shots+=len(train_df)
-        return {'train_pulse':result}
+    @property
+    def filter_dicts(self):
+        if self._filter_dicts is None:
+            self._filter_dicts=[]
+            for train_list in self.train_list:
+                result=[]
+                used_shots=0
+                for t_id in train_list:
+                    if used_shots>=self.nshot: break
+                    train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
+                    if len(train_df) >= self.nshot-used_shots: selected_entries = train_df.head(self.nshot-used_shots)
+                    else: selected_entries = train_df
+                    for _, row in selected_entries.iterrows():
+                        result.append((row['trainId'], row['pulseId']))
+                    used_shots+=len(train_df)
+                self._filter_dicts.append({'train_pulse':result})
+        
+        return self._filter_dicts
         
     @property
-    def average(self):
-        if self._average is None:
-            img = self.agipd.get_dask_array('image.data')
-            self._average=[]
-            for train_list in self.train_list:
-                flag_dict=self.create_filterdict(train_list)
-                self._average.append(img.sel(flag_dict).mean('train_pulse'))
-        
-
-        return self._average
+    def img_dask(self):
+        if self._img_dask is None:
+            self._img_dask = self.agipd.get_dask_array('image.data')
+        return self._img_dask
 
 def main(run=None, flag_num=1, nshot=200):
     mask=mask_full_fluor()
@@ -159,7 +165,9 @@ def main(run=None, flag_num=1, nshot=200):
 
     with SLURMCluster(**cluster_kwargs) as cluster, Client(cluster) as client:
         cluster.scale(32)
-        results = [(ana.average) for ana in analysis]
+        results=[]
+        for ana in analysis:
+            results.append([compute_average(ana.img_dask,filter_dict) for filter_dict in ana.filter_dicts])
         results = dask.compute(*results)
 
 
