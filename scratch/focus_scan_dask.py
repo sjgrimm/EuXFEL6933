@@ -13,6 +13,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, progress
+import sys
+sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
+import data_helper as dh
+import argparse
+import pandas as pd
 
 from damnit import Damnit
 from extra_data import open_run
@@ -20,9 +25,11 @@ from extra_data.components import AGIPD1M
 
 from tqdm import tqdm
 
+path = dh.expPath+'Results/FocusScans/DataDask/'
+
 proposal = 6933
 
-def mask_full_flour(bad=False):
+def mask_full_fluor(bad=False):
     '''
     plot_data:  12 | 0   imshow:  7 | 11
                 13 | 1            6 | 10
@@ -53,8 +60,48 @@ def mask_full_flour(bad=False):
 
     return mask
 
-def main(run=None, flag_num=1, nshot=200):
+class Analysis:
+    def __init__(self, run, att, energy, z_pos_list, train_list, nshot, df_flags, flag):
+        self.nrun = run
+        self.run = open_run(proposal=proposal, run=self.nrun, parallelize=True)
+        self.agipd = AGIPD1M(self.run)
+        self.att=att
+        self.energy=energy
+        self.z_pos_list = z_pos_list
+        self.train_list = train_list
+        self.nshot = nshot
+        self.df_flags = df_flags
+        self.flag=flag
+        self._average = None
 
+    def create_filterdict(self):
+        result=[]
+        for train_list in self.train_list:
+            used_shots=0
+            for t_id in train_list:
+                if used_shots>=self.nshot: break
+                train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
+                filtered_df =  train_df.loc[self.df_flags['flags'] == 1]
+                if len(filtered_df) >= self.nshot-used_shots: selected_entries = filtered_df.head(self.nshot-used_shots)
+                else: selected_entries = filtered_df
+                for _, row in selected_entries.iterrows():
+                    result.append((row['trainId'], row['pulseId']))
+                used_shots+=len(filtered_df)
+        return {'train_pulse':result}
+        
+    @property
+    def average(self):
+        if self._average is None:
+            img = self.agipd.get_dask_array('image.data')
+            flag_dict=self.create_filterdict()
+            self._average = img.sel(flag_dict).mean('train_pulse')
+        
+
+        return self._average
+
+def main(run=None, flag_num=1, nshot=200):
+    mask=mask_full_fluor()
+    analysis=[]
     if run is not None:
         run = run
     else:
@@ -97,10 +144,61 @@ def main(run=None, flag_num=1, nshot=200):
                 new_pos_list.append(pos)
                 train_list.append(train_array)
 
-            df_fluorescence = z_scan_fluorescence(run, att, energy, new_pos_list, train_list, nshot, df_f, flag, save=True)
-            find_focus_scipy(run, att, energy, df_fluorescence, nshot, save=True)
+            analysis.append(Analysis(run, att, energy, new_pos_list, train_list, nshot, df_f, flag)) 
+ 
+    
+    partition = 'upex'   # For users
+    with SLURMCluster(
+    queue=partition,
+    local_directory='/scratch',  # Local disk space for workers to use
+    # Resources per SLURM job (per node, the way SLURM is configured on Maxwell)
+    # processes=16 runs 16 Dask workers in a job, so each worker has 1 core & 32 GB RAM.
+    processes=16, cores=16, memory='512GB',
+) as cluster, Client(cluster) as client:
+        cluster.scale(32)
+        results = [(ana.average) for ana in analysis]
+        results = dask.compute(*results)
+
+
+    #Hier rufe ich die schleife von oben zum speichern nochmal auf. das geht bestimmt besser so ist es aber gerade am einfachsten und schnellsten für mich
+    i=0
+    for att in df['total_transmission'].unique():
+        df_att = df[df['total_transmission']==att]
+        
+        for energy in df_att['photon_energy'].unique():
+            df_e = df_att[df_att['photon_energy']==energy]
+
+            pos_list = sorted(df_e['injector_pos'].unique())
+            new_pos_list = []
+            train_list = []
+            
+            for pos in pos_list:
+                train_array = df_e[df_e['injector_pos']==pos]['trainId'].to_numpy()
+
+                if len(train_array)<20: continue
+
+                print('Position and their number of trains:', pos, len(train_array))
+                new_pos_list.append(pos)
+                train_list.append(train_array)
+
+            #currently not working for multiple z-positions
+            ret_dict = {}
+            ret_dict['transmission'] = att
+            ret_dict['photon_energy'] = energy
+            ret_dict['injector_pos'] = new_pos_list
+            ret_dict['transmission']=r
+            ret_dict['f_yield'] = float(np.mean(results[i]*mask))
+            i+=1
+            df_ret = pd.DataFrame(ret_dict)
+
+            
+            path = dh.expPath+'Results/FocusScans/Data/'
+            df_ret.to_hdf(path+'fyield_r{}_att{}_{}eV_ROIs_n{}.h5'.format(dh.run_format(run), att, energy, nshot), key='f_yield')
+
+
     
     return
 
 if __name__ == '__main__':
     main()
+    print('finished', flush=True)
