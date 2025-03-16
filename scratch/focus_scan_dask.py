@@ -25,6 +25,8 @@ from extra_data import open_run
 from extra_data.components import AGIPD1M
 
 from tqdm import tqdm
+import os 
+import time
 
 path = dh.expPath+'Results/FocusScans/DataDask/'
 
@@ -75,27 +77,27 @@ class Analysis:
         self.flag=flag
         self._average = None
 
-    def create_filterdict(self):
+    def create_filterdict(self, train_list):
         result=[]
-        for train_list in self.train_list:
-            used_shots=0
-            for t_id in train_list:
-                if used_shots>=self.nshot: break
-                train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
-                filtered_df =  train_df.loc[self.df_flags['flags'] == 1]
-                if len(filtered_df) >= self.nshot-used_shots: selected_entries = filtered_df.head(self.nshot-used_shots)
-                else: selected_entries = filtered_df
-                for _, row in selected_entries.iterrows():
-                    result.append((row['trainId'], row['pulseId']))
-                used_shots+=len(filtered_df)
+        used_shots=0
+        for t_id in train_list:
+            if used_shots>=self.nshot: break
+            train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
+            if len(train_df) >= self.nshot-used_shots: selected_entries = train_df.head(self.nshot-used_shots)
+            else: selected_entries = train_df
+            for _, row in selected_entries.iterrows():
+                result.append((row['trainId'], row['pulseId']))
+            used_shots+=len(train_df)
         return {'train_pulse':result}
         
     @property
     def average(self):
         if self._average is None:
             img = self.agipd.get_dask_array('image.data')
-            flag_dict=self.create_filterdict()
-            self._average = img.sel(flag_dict).mean('train_pulse')
+            self._average=[]
+            for train_list in self.train_list:
+                flag_dict=self.create_filterdict(train_list)
+                self._average.append(img.sel(flag_dict).mean('train_pulse'))
         
 
         return self._average
@@ -188,7 +190,7 @@ def main(run=None, flag_num=1, nshot=200):
             ret_dict['photon_energy'] = energy
             ret_dict['inj_pos_z'] = new_pos_list
             ret_dict['run']=run
-            ret_dict['f_yield'] = float(np.mean(results[i]*mask))
+            ret_dict['f_yield'] = [float(np.mean(results[i][j]*mask)) for j in range(len(results[i]))]
             i+=1
             df_ret = pd.DataFrame(ret_dict)
 
@@ -201,5 +203,7 @@ def main(run=None, flag_num=1, nshot=200):
     return
 
 if __name__ == '__main__':
+    t0=time.time()
     main()
-    print('finished', flush=True)
+    t1=time.time()
+    print(f'finished in {t1-t0} seconds', flush=True)
