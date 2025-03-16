@@ -2,6 +2,8 @@
 Created on Thursday 27.02.2025
 
 @author: Jan Niklas Leutloff
+@author: Nils Hendrik Muthreich
+@author: Paul Rasmus Buchin
 
 import sys
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
