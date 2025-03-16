@@ -15,9 +15,11 @@ class Run():
         self.data_source = dh.data_source(self.run_number)
         self.train_data = self.getTrainData()
         self.pulse_data = self.getPulseData()
-        self.reduced_pulse_data = self.getReducedPulseData()
+        self.reduced_pulse_data = self.getReducedPulseData()              #flag==1
+        self.bad_pulse_data = self.getBadPulseData()                      #flag==0
         self.all_data = self.getAllData()
-        self.reduced_data = self.getReducedData()
+        self.reduced_data = self.getReducedData()                         #flag==1
+        self.bad_data = self.getBadData()                                 #flag==0
         self.hitrate = len(self.reduced_pulse_data)/len(self.pulse_data)
         self.geom = dh.getGeometry(self.run_number)
 
@@ -118,6 +120,16 @@ class Run():
         filtered_df = df[df['flags'] == 1]
         return filtered_df
 
+    def getBadPulseData(self):
+        '''
+        Returns
+        -------
+        The pulse data for which the flag is equal to zero as pd.DataFram.
+        '''
+        df = self.pulse_data
+        filtered_df = df[df['flags'] == 0]
+        return filtered_df
+
     def getAllData(self):
         '''
         Returns
@@ -138,4 +150,15 @@ class Run():
         df_reduced_pulse = self.reduced_pulse_data
         df_train = self.train_data
         df = pd.merge(df_train, df_reduced_pulse, on='trainId', how='inner')
+        return df
+
+    def getBadData(self):
+        '''
+        Returns
+        -------
+        The merged bad_pulse and train data as pd.DataFrame.
+        '''
+        df_bad_pulse = self.bad_pulse_data
+        df_train = self.train_data
+        df = pd.merge(df_train, df_bad_pulse, on='trainId', how='inner')
         return df
