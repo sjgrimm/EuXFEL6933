@@ -61,7 +61,7 @@ class Run():
         '''
         Returns
         -------
-        All 2d data which is recorded per pulse as pd.DataFram.
+        All 2d data which is recorded per pulse as pd.DataFrame.
         They are sorted by trainId and pulseId.
         '''
         sel_flags = self.data_source.select([(dh.det['hitfinder'], 'data.pulseId'),
@@ -80,12 +80,15 @@ class Run():
 
         xgm2 = self.getPulseEnergy(xgm='xgm2')
         xgm9 = self.getPulseEnergy(xgm='xgm9')
+        ix = np.arange(1, 352)*4+20
+        hirex = self.data_source[dh.det['hirex'], 'data.frameNumber'].ndarray()[:, ix].reshape(-1)
         
         df_flags['pulse_energy_xgm2'] = xgm2
         df_flags['pulse_energy_xgm9'] = xgm9
+        df_flags['hirex_frame_number'] = hirex
 
         column_order = ['trainId', 'pulseId', 'flags', 'hitscore', 
-                        'pulse_energy_xgm2', 'pulse_energy_xgm9']
+                        'pulse_energy_xgm2', 'pulse_energy_xgm9', 'hirex_frame_number']
         df = df_flags[column_order]
 
         return df
