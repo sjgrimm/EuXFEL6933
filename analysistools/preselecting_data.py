@@ -78,17 +78,17 @@ class Run():
         #xgm2 = self.getPulseEnergy(xgm='xgm2').stack(z=('trainId', 'dim_0'), create_index=False).values
         #xgm9 = self.getPulseEnergy(xgm='xgm9').stack(z=('trainId', 'dim_0'), create_index=False).values
 
-        xgm2 = self.getPulseEnergy(xgm='xgm2')
-        xgm9 = self.getPulseEnergy(xgm='xgm9')
-        ix = np.arange(1, 352)*4+20
-        hirex = self.data_source[dh.det['hirex'], 'data.frameNumber'].ndarray()[:, ix].reshape(-1)
+        # xgm2 = self.getPulseEnergy(xgm='xgm2')
+        # xgm9 = self.getPulseEnergy(xgm='xgm9')
+        # ix = np.arange(1, 352)*4+20
+        # hirex = self.data_source[dh.det['hirex'], 'data.frameNumber'].ndarray()[:, ix].reshape(-1)
         
-        df_flags['pulse_energy_xgm2'] = xgm2
-        df_flags['pulse_energy_xgm9'] = xgm9
-        df_flags['hirex_frame_number'] = hirex
+        # df_flags['pulse_energy_xgm2'] = xgm2
+        # df_flags['pulse_energy_xgm9'] = xgm9
+        # df_flags['hirex_frame_number'] = hirex
 
-        column_order = ['trainId', 'pulseId', 'flags', 'hitscore', 
-                        'pulse_energy_xgm2', 'pulse_energy_xgm9', 'hirex_frame_number']
+        column_order = ['trainId', 'pulseId', 'flags', 'hitscore'] 
+                       # 'pulse_energy_xgm2', 'pulse_energy_xgm9', 'hirex_frame_number']
         df = df_flags[column_order]
 
         return df
@@ -111,6 +111,7 @@ class Run():
         #filtered_intensity = intensity.where(intensity!=1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
         intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()[:, 1:]
         filtered_intensity = intensity[intensity != 1.0]
+        print(len(filtered_intensity))
         return filtered_intensity
 
     def getReducedPulseData(self):
