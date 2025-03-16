@@ -16,6 +16,7 @@ from dask.distributed import Client, progress
 import sys
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import data_helper as dh
+import preselecting_data as pre_d
 import argparse
 import pandas as pd
 
@@ -117,13 +118,8 @@ def main(run=None, flag_num=1, nshot=200):
         nshot = args.nshot
 
     flag = True if flag_num==1 else False
-        
-    df_e = dh.getPhotonEnergy_trainwise(run)
-    df_p = dh.getInjectorPos_trainwise(run)
-    df_att = dh.getTransmission_trainwise(run)
-    df_f = dh.getFlags(run)
-    df = pd.merge(df_e, df_p, on='trainId', how='inner')
-    df = pd.merge(df, df_att, on='trainId', how='inner')
+    
+    df=pre_d.Run(run).reduced_data
 
     for att in df['total_transmission'].unique():
         df_att = df[df['total_transmission']==att]
@@ -131,12 +127,12 @@ def main(run=None, flag_num=1, nshot=200):
         for energy in df_att['photon_energy'].unique():
             df_e = df_att[df_att['photon_energy']==energy]
 
-            pos_list = sorted(df_e['injector_pos'].unique())
+            pos_list = sorted(df_e['inj_pos_z'].unique())
             new_pos_list = []
             train_list = []
             
             for pos in pos_list:
-                train_array = df_e[df_e['injector_pos']==pos]['trainId'].to_numpy()
+                train_array = df_e[df_e['inj_pos_z']==pos]['trainId'].to_numpy()
 
                 if len(train_array)<20: continue
 
@@ -144,17 +140,22 @@ def main(run=None, flag_num=1, nshot=200):
                 new_pos_list.append(pos)
                 train_list.append(train_array)
 
-            analysis.append(Analysis(run, att, energy, new_pos_list, train_list, nshot, df_f, flag)) 
+            analysis.append(Analysis(run, att, energy, new_pos_list, train_list, nshot, df, flag)) 
  
-    
-    partition = 'upex'   # For users
-    with SLURMCluster(
-    queue=partition,
-    local_directory='/scratch',  # Local disk space for workers to use
-    # Resources per SLURM job (per node, the way SLURM is configured on Maxwell)
-    # processes=16 runs 16 Dask workers in a job, so each worker has 1 core & 32 GB RAM.
-    processes=16, cores=16, memory='512GB',
-) as cluster, Client(cluster) as client:
+    log_directory = f"/gpfs/exfel/exp/SPB/202501/p006933/usr/Shared/muthreich/Logs/"
+    os.makedirs(log_directory, exist_ok=True)
+
+    # Define the SLURMCluster with the log directory
+    cluster_kwargs = {
+    'queue': 'upex',
+    'local_directory': '/scratch',
+    'processes': 16,
+    'cores': 16,
+    'memory': '512GB',
+    'log_directory': log_directory,  # Set the log directory
+    }
+
+    with SLURMCluster(**cluster_kwargs) as cluster, Client(cluster) as client:
         cluster.scale(32)
         results = [(ana.average) for ana in analysis]
         results = dask.compute(*results)
@@ -168,12 +169,12 @@ def main(run=None, flag_num=1, nshot=200):
         for energy in df_att['photon_energy'].unique():
             df_e = df_att[df_att['photon_energy']==energy]
 
-            pos_list = sorted(df_e['injector_pos'].unique())
+            pos_list = sorted(df_e['inj_pos_z'].unique())
             new_pos_list = []
             train_list = []
             
             for pos in pos_list:
-                train_array = df_e[df_e['injector_pos']==pos]['trainId'].to_numpy()
+                train_array = df_e[df_e['inj_pos_z']==pos]['trainId'].to_numpy()
 
                 if len(train_array)<20: continue
 
@@ -185,8 +186,8 @@ def main(run=None, flag_num=1, nshot=200):
             ret_dict = {}
             ret_dict['transmission'] = att
             ret_dict['photon_energy'] = energy
-            ret_dict['injector_pos'] = new_pos_list
-            ret_dict['transmission']=r
+            ret_dict['inj_pos_z'] = new_pos_list
+            ret_dict['run']=run
             ret_dict['f_yield'] = float(np.mean(results[i]*mask))
             i+=1
             df_ret = pd.DataFrame(ret_dict)
