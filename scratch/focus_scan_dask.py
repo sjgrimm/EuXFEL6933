@@ -30,8 +30,8 @@ import os
 import time
 
 
-def compute_average(img, flag_dict):
-    return img.sel(flag_dict).mean('train_pulse')
+def compute_average(img, flag_dict, xgm_9):
+    return (img.sel(flag_dict)*(1/np.array(xgm_9))[:, np.newaxis, np.newaxis]).mean('train_pulse')
 
 path = dh.expPath+'Results/FocusScans/DataDask/'
 
@@ -82,6 +82,7 @@ class Analysis:
         self.flag=flag
         self._img_dask = None
         self._filter_dicts = None
+        self._xgm_9 = None
 
     @property
     def filter_dicts(self):
@@ -101,6 +102,25 @@ class Analysis:
                 self._filter_dicts.append({'train_pulse':result})
         
         return self._filter_dicts
+
+    @property
+    def xgm_9(self):
+        if self._xgm_9 is None:
+            self._xgm_9=[]
+            for train_list in self.train_list:
+                result=[]
+                used_shots=0
+                for t_id in train_list:
+                    if used_shots>=self.nshot: break
+                    train_df=self.df_flags.loc[self.df_flags['trainId'] == t_id]
+                    if len(train_df) >= self.nshot-used_shots: selected_entries = train_df.head(self.nshot-used_shots)
+                    else: selected_entries = train_df
+                    for _, row in selected_entries.iterrows():
+                        result.append(row['pulse_energy_xgm9'])
+                    used_shots+=len(train_df)
+                self._xgm_9.append(result)
+        
+        return self._xgm_9
         
     @property
     def img_dask(self):
@@ -167,7 +187,7 @@ def main(run=None, flag_num=1, nshot=200):
         cluster.scale(32)
         results=[]
         for ana in analysis:
-            results.append([compute_average(ana.img_dask,filter_dict) for filter_dict in ana.filter_dicts])
+            results.append([compute_average(ana.img_dask,filter_dict, xgm_9) for filter_dict, xgm_9 in zip(ana.filter_dicts, ana.xgm_9)])
         results = dask.compute(*results)
 
 
