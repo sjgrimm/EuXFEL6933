@@ -96,6 +96,8 @@ class Run():
         '''
         Parameter
         ---------
+        npulse_per_train : int
+            Number of pulses per train.
         xgm : str, optional
             Determines which gas detector should be used.
             Default is xgm9.
