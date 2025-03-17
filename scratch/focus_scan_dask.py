@@ -31,7 +31,8 @@ import time
 
 
 def compute_average(img, flag_dict, xgm_9):
-    return (img.sel(flag_dict)*(1/np.array(xgm_9))[:, np.newaxis, np.newaxis]).mean('train_pulse')
+    #return (img.sel(flag_dict)*(1/np.array(xgm_9))[:, np.newaxis, np.newaxis]).mean('train_pulse')
+    return img.sel(flag_dict).mean('train_pulse')
 
 path = dh.expPath+'Results/FocusScans/DataDask/'
 
@@ -218,7 +219,7 @@ def main(run=None, flag_num=1, nshot=200):
             ret_dict['photon_energy'] = energy
             ret_dict['inj_pos_z'] = new_pos_list
             ret_dict['run']=run
-            ret_dict['f_yield'] = [float(np.mean(results[i][j]*mask)) for j in range(len(results[i]))]
+            ret_dict['f_yield_ROI0'] = [float(np.mean(results[i][j]*mask)) for j in range(len(results[i]))]
             i+=1
             df_ret = pd.DataFrame(ret_dict)
 
