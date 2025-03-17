@@ -11,7 +11,7 @@
 # # #SBATCH --partition=upex
 
 # For submitting do the following
-# # # sbatch --export=R=8,F=1 submit_focus_scan.sh
+# # # sbatch --export=R=8,F=1,N=400 submit_focus_scan.sh
 # # # seq 35 99 | xargs -I{} sbatch --export=R={},F=1,N=200 submit_focus_scan.sh
 
 # Default values for optional arguments
