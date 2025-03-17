@@ -18,7 +18,7 @@
 RUN=$R
 FLAG=$F
 NSHOT=$N
-PYTHON_SCRIPT_PATH="/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/scratch/focus_scan_dask.py"
+PYTHON_SCRIPT_PATH="/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools/focus_scan_dask.py"
 
 echo $RUN
 echo $FLAG
