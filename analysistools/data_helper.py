@@ -296,41 +296,48 @@ def getPhotonEnergy(run):
     energy = sel[det['undulator_e'], 'actualPosition'].drop_empty_trains()[0].ndarray()[0] * 1e3 + e_offset
     return int(np.round(energy, 0))
 
-def getPulseEnergy(run, xgm='xgm9'):
-    '''
-    returns 
-    ----------
-    The pulse energy for the given gas detector as 1d ndarray (2d xarray).
-    (The first dimension is the trainId and 
-    the second dimension is the number of pulses (not pulseId!)).
-    '''
-    data = ex.open_run(proposal, run)
-    xgm_field = det[xgm]
-    #intensity = data[xgm_field, 'data.intensitySa1TD'].xarray()
-    #filtered_intensity = intensity.where(intensity != 1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
-    intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()[:, 1:]
-    filtered_intensity = intensity[intensity != 1.0]
-    return filtered_intensity
+def getPulseEnergy(self, npulse_per_train, xgm: str='xgm9'):
+        '''
+        Parameter
+        ---------
+        npulse_per_train : int
+            Number of pulses per train.
+        xgm : str, optional
+            Determines which gas detector should be used.
+            Default is xgm9.
 
-def getPulseEnergy_trainwise(run, xgm='xgm9', flags=True, trainList=None):
-    '''
-    returns 
-    ----------
-    a generator that gives the pulse_energy for trains using pulse_energy(run, xgm='xgm9') and data.sel(trainId=t_id).
-    Only exist as an option to directly apply the hitfinderflag when flags=True
-    '''
-    ds = data_source(run)
-    if flags:
-        flag_array=ds[det['hitfinder'], 'data.hitFlag'].xarray()
-    pulse_energies=getPulseEnergy(run, xgm=xgm)
-    for t_id in pulse_energies.coords['trainId'].values if trainList is None else trainList:
-        pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
-        if flags:
-            mask = flag_array.sel(trainId=t_id)
-            mask=mask.rename({'trainId':'dim_0'})
-            yield pulse_energies_train.where(mask).dropna(dim='dim_0')
-        else:
-            yield pulse_energies_train
+        Returns
+        -------
+        The pulse energy for the given gas detector as 1d ndarray.
+        '''
+        # The first pulse (pulseId==0) is not recorded by the xgms because there is no pulse (dark image for the agipd)
+        # The dark image of the agipd is recorded but filtered out for our data analysis
+        # The agipd record all in all npulses but because the first is the dark the last real pulse isn't recorded
+        # So one has to cut of the last pulse of each train of the xgm and also of hirex since the agipd doesn't record it
+        intensity = data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()
+        filtered_intensity = [t_intensity[t_intensity != 1.0][:npulse_per_train] for t_intensity in intensity]
+        filtered_intensity = np.asarray(filtered_intensity).reshape(-1)
+        return filtered_intensity
+
+#def getPulseEnergy_trainwise(run, xgm='xgm9', flags=True, trainList=None):
+#    '''
+#    returns 
+#    ----------
+#    a generator that gives the pulse_energy for trains using pulse_energy(run, xgm='xgm9') and data.sel(trainId=t_id).
+#    Only exist as an option to directly apply the hitfinderflag when flags=True
+#    '''
+#    ds = data_source(run)
+#    if flags:
+#        flag_array=ds[det['hitfinder'], 'data.hitFlag'].xarray()
+#    pulse_energies=getPulseEnergy(run, xgm=xgm)
+#    for t_id in pulse_energies.coords['trainId'].values if trainList is None else trainList:
+#        pulse_energies_train=pulse_energies.sel(trainId=t_id).copy()
+#        if flags:
+#            mask = flag_array.sel(trainId=t_id)
+#            mask=mask.rename({'trainId':'dim_0'})
+#            yield pulse_energies_train.where(mask).dropna(dim='dim_0')
+#        else:
+#            yield pulse_energies_train
 
 
 def getInjectorPos_trainwise(run, axis='z'):
