@@ -14,12 +14,12 @@ class Run():
         self.proposal = proposal
         self.data_source = dh.data_source(self.run_number)
         self.train_data = self.getTrainData()
-        self.pulse_data = self.getPulseData()
-        self.reduced_pulse_data = self.getReducedPulseData()              #flag==1
-        self.bad_pulse_data = self.getBadPulseData()                      #flag==0
-        self.all_data = self.getAllData()
-        self.reduced_data = self.getReducedData()                         #flag==1
-        self.bad_data = self.getBadData()                                 #flag==0
+        self.pulse_data = self.getPulseData()                            #flag==[0, 1]
+        self.reduced_pulse_data = self.getReducedPulseData()             #flag==1
+        self.bad_pulse_data = self.getBadPulseData()                     #flag==0
+        self.all_data = self.getAllData()                                #flag==[0, 1]
+        self.reduced_data = self.getReducedData()                        #flag==1
+        self.bad_data = self.getBadData()                                #flag==0
         self.hitrate = len(self.reduced_pulse_data)/len(self.pulse_data)
         self.geom = dh.getGeometry(self.run_number)
 
@@ -27,7 +27,7 @@ class Run():
         '''
         Returns
         -------
-        All 1d data which is only recorded for whole trains as pd.DataFram.
+        All 1d data which is only recorded for whole trains as pd.DataFrame.
         They are sorted by trainId.
         '''
         sel = self.data_source.select([(dh.det['undulator_e'], 'actualPosition.value'),
@@ -102,15 +102,13 @@ class Run():
 
         Returns
         -------
-        The pulse energy for the given gas detector as 1d ndarray (2d xarray).
-        (The first dimension is the trainId and 
-        the second dimension is the number of pulses (not pulseId!)).
+        The pulse energy for the given gas detector as 1d ndarray.
         '''
         # The first pulse (pulseId==0) is not recorded by the xgms because there is no pulse (dark image for the agipd)
         # The dark image of the agipd is recorded but filtered out for our data analysis
         # The agipd record all in all npulses but because the first is the dark the last real pulse isn't recorded
         # So one has to cut of the last pulse of each train of the xgm and also of hirex since the agipd doesn't record it
-        intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()#[:, :-1]
+        intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()
         filtered_intensity = [t_intensity[t_intensity != 1.0][:npulse_per_train] for t_intensity in intensity]
         filtered_intensity = np.asarray(filtered_intensity).reshape(-1)
         return filtered_intensity
@@ -119,7 +117,7 @@ class Run():
         '''
         Returns
         -------
-        The pulse data for which the flag is equal to one as pd.DataFram.
+        The pulse data for which the flag is equal to one as pd.DataFrame.
         '''
         df = self.pulse_data
         filtered_df = df[df['flags'] == 1]
@@ -129,7 +127,7 @@ class Run():
         '''
         Returns
         -------
-        The pulse data for which the flag is equal to zero as pd.DataFram.
+        The pulse data for which the flag is equal to zero as pd.DataFrame.
         '''
         df = self.pulse_data
         filtered_df = df[df['flags'] == 0]
