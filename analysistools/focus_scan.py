@@ -180,16 +180,24 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_data, 
     -------
     np.ndarray that contains the fluorescence corresponding to the runs
     '''
-    parameter = []
-    for trains in train_list:
-        parameter.append([run, trains, df_data, flag, nshot])
-
-    if (len(pos_list)>1):
+    if len(pos_list)>1:
+        parameter = []
+        for trains in train_list:
+            parameter.append([run, trains, df_data, flag, nshot])
+            
         with Pool(len(pos_list), maxtasksperchild=1) as pool:
             results = pool.starmap(calcFluorescence, parameter)
 
     else:
-        results = calcFluorescence(*parameter)
+        split_number = 8
+        train_list = np.array_split(train_list[0], split_number)
+        parameter = []
+        for trains in train_list:
+            parameter.append([run, trains, df_data, flag, nshot])
+            
+        with Pool(split_number, maxtasksperchild=1) as pool:
+            results = pool.starmap(calcFluorescence, parameter)
+            results = [np.mean(results, axis=0)]
     
     mean_fluorescence = np.asarray(results, dtype=float)
     print(np.shape(mean_fluorescence), flush=True)
@@ -198,6 +206,7 @@ def z_scan_fluorescence(run, att, energy, pos_list, train_list, nshot, df_data, 
     ret_dict['transmission'] = att
     ret_dict['photon_energy'] = energy
     ret_dict['injector_pos'] = pos_list
+    ret_dict['agipd_pos_z'] = df_data['agipd_pos_z'][0]
     for i in range(np.shape(mean_fluorescence)[1]):
         ret_dict['f_yield_ROI{}'.format(i)] = mean_fluorescence[:,i]
     
@@ -282,28 +291,28 @@ def main(run=None, flag_num=1, nshot=200):
 
     flag = True if flag_num==1 else False
         
-    df_e = dh.getPhotonEnergy_trainwise(run)
-    df_p = dh.getInjectorPos_trainwise(run)
-    df_att = dh.getTransmission_trainwise(run)
+    #df_e = dh.getPhotonEnergy_trainwise(run)
+    #df_p = dh.getInjectorPos_trainwise(run)
+    #df_att = dh.getTransmission_trainwise(run)
     Run = pred.Run(run)
     df_data = Run.reduced_data
     #df_f = dh.getFlags(run)
-    df = pd.merge(df_e, df_p, on='trainId', how='inner')
-    df = pd.merge(df, df_att, on='trainId', how='inner')
+    #df = pd.merge(df_e, df_p, on='trainId', how='inner')
+    #df = pd.merge(df, df_att, on='trainId', how='inner')
 
-    for att in df['total_transmission'].unique():
-        df_att = df[df['total_transmission']==att]
+    for att in df_data['total_transmission'].unique():
+        df_att = df_data[df_data['total_transmission']==att]
         
         for energy in df_att['photon_energy'].unique():
             df_e = df_att[df_att['photon_energy']==energy]
 
-            pos_list = sorted(df_e['injector_pos'].unique())
+            pos_list = sorted(df_e['inj_pos_z'].unique())
             new_pos_list = []
             train_list = []
             filtered_z = []
             
             for pos in pos_list:
-                train_array = df_e[df_e['injector_pos']==pos]['trainId'].to_numpy()
+                train_array = df_e[df_e['inj_pos_z']==pos]['trainId'].to_numpy()
 
                 #size = train_array.size
                 #middle = size//2
