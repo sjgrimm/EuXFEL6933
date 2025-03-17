@@ -56,6 +56,9 @@ def radialProfile_pyfai(not_assembled_image, geom, dist=None, wavelength=None):
                              dist=dist,  # sample-detector distance (m)
                              wavelength=wavelength#(12.3984 / 9.3) * 1e-10  # wavelength (m)
                             )
+    #center = (0.1306, 0.1092)#(2e-4*(img.shape[0] // 2), 2e-4*(img.shape[1] // 2))
+    #ai.poni1 = center[0]
+    #ai.poni2 = center[1]
     
     rint, I = ai.integrate1d(not_assembled_image.reshape(16*512, 128),
                              npt=300,
