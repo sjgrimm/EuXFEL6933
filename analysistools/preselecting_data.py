@@ -75,25 +75,24 @@ class Run():
         df_flags = df_flags.reset_index()
         df_flags = df_flags.sort_values(by=['trainId', 'pulseId'])
 
-        #xgm2 = self.getPulseEnergy(xgm='xgm2').stack(z=('trainId', 'dim_0'), create_index=False).values
-        #xgm9 = self.getPulseEnergy(xgm='xgm9').stack(z=('trainId', 'dim_0'), create_index=False).values
-
-        # xgm2 = self.getPulseEnergy(xgm='xgm2')
-        # xgm9 = self.getPulseEnergy(xgm='xgm9')
-        # ix = np.arange(1, 352)*4+20
-        # hirex = self.data_source[dh.det['hirex'], 'data.frameNumber'].ndarray()[:, ix].reshape(-1)
+        npulse_per_train = int(len(df_flags['flags'])/len(self.data_source.train_ids))
         
-        # df_flags['pulse_energy_xgm2'] = xgm2
-        # df_flags['pulse_energy_xgm9'] = xgm9
-        # df_flags['hirex_frame_number'] = hirex
+        xgm2 = self.getPulseEnergy(npulse_per_train=npulse_per_train, xgm='xgm2')
+        xgm9 = self.getPulseEnergy(npulse_per_train=npulse_per_train, xgm='xgm9')
+        ix = np.arange(npulse_per_train)*4+20
+        hirex = self.data_source[dh.det['hirex'], 'data.frameNumber'].ndarray()[:, ix].reshape(-1)
 
-        column_order = ['trainId', 'pulseId', 'flags', 'hitscore'] 
-                       # 'pulse_energy_xgm2', 'pulse_energy_xgm9', 'hirex_frame_number']
+        df_flags['pulse_energy_xgm2'] = xgm2
+        df_flags['pulse_energy_xgm9'] = xgm9
+        df_flags['hirex_frame_number'] = hirex
+        column_order = ['trainId', 'pulseId', 'flags', 'hitscore',
+                        'pulse_energy_xgm2', 'pulse_energy_xgm9', 'hirex_frame_number']
+    
         df = df_flags[column_order]
 
         return df
 
-    def getPulseEnergy(self, xgm: str='xgm9'):
+    def getPulseEnergy(self, npulse_per_train, xgm: str='xgm9'):
         '''
         Parameter
         ---------
@@ -107,11 +106,13 @@ class Run():
         (The first dimension is the trainId and 
         the second dimension is the number of pulses (not pulseId!)).
         '''
-        #intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].xarray()
-        #filtered_intensity = intensity.where(intensity!=1).dropna(dim='dim_0').isel(dim_0=slice(1,None))
-        intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()[:, 1:]
-        filtered_intensity = intensity[intensity != 1.0]
-        print(len(filtered_intensity))
+        # The first pulse (pulseId==0) is not recorded by the xgms because there is no pulse (dark image for the agipd)
+        # The dark image of the agipd is recorded but filtered out for our data analysis
+        # The agipd record all in all npulses but because the first is the dark the last real pulse isn't recorded
+        # So one has to cut of the last pulse of each train of the xgm and also of hirex since the agipd doesn't record it
+        intensity = self.data_source[dh.det[xgm], 'data.intensitySa1TD'].ndarray()#[:, :-1]
+        filtered_intensity = [t_intensity[t_intensity != 1.0][:npulse_per_train] for t_intensity in intensity]
+        filtered_intensity = np.asarray(filtered_intensity).reshape(-1)
         return filtered_intensity
 
     def getReducedPulseData(self):

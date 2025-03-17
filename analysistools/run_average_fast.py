@@ -69,8 +69,18 @@ def main():
     start_run=int(sys.argv[1])
     end_run=int(sys.argv[2])
     nshot=int(sys.argv[3])
-    with SLURMCluster(queue='upex', local_directory='/scratch', processes=16, cores=16, memory='512GB')\
-        as cluster, Client(cluster) as client:
+    log_directory = f"/gpfs/exfel/exp/SPB/202501/p006933/usr/Shared/muthreich/Logs/"
+    os.makedirs(log_directory, exist_ok=True)
+    cluster_kwargs = {
+    'queue': 'upex',
+    'local_directory': '/scratch',
+    'processes': 16,
+    'cores': 16,
+    'memory': '512GB',
+    'log_directory': log_directory,  # Set the log directory
+    }
+
+    with SLURMCluster(**cluster_kwargs) as cluster, Client(cluster) as client:
         cluster.scale(32)
     
         analysis = [Analysis_flag(i, nshot=nshot) for i in range(start_run,end_run+1)]
