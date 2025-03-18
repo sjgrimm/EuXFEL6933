@@ -9,19 +9,25 @@ import pandas as pd
 import extra_data as ex
 
 class Run():
-    def __init__(self, run_number: int, proposal: int=6933):
+    def __init__(self, run_number: int, proposal: int=6933, trainwise: bool=False):
         self.run_number = run_number
         self.proposal = proposal
         self.data_source = dh.data_source(self.run_number)
         self.train_data = self.getTrainData()
-        self.pulse_data = self.getPulseData()                            #flag==[0, 1]
-        self.reduced_pulse_data = self.getReducedPulseData()             #flag==1
-        self.bad_pulse_data = self.getBadPulseData()                     #flag==0
-        self.all_data = self.getAllData()                                #flag==[0, 1]
-        self.reduced_data = self.getReducedData()                        #flag==1
-        self.bad_data = self.getBadData()                                #flag==0
-        self.hitrate = len(self.reduced_pulse_data)/len(self.pulse_data)
         self.geom = dh.getGeometry(self.run_number)
+        
+        if not trainwise:
+            self.run_number = run_number
+            self.proposal = proposal
+            self.data_source = dh.data_source(self.run_number)
+            self.train_data = self.getTrainData()
+            self.pulse_data = self.getPulseData()                            #flag==[0, 1]
+            self.reduced_pulse_data = self.getReducedPulseData()             #flag==1
+            self.bad_pulse_data = self.getBadPulseData()                     #flag==0
+            self.all_data = self.getAllData()                                #flag==[0, 1]
+            self.reduced_data = self.getReducedData()                        #flag==1
+            self.bad_data = self.getBadData()                                #flag==0
+            self.hitrate = len(self.reduced_pulse_data)/len(self.pulse_data)
 
     def getTrainData(self):
         '''
