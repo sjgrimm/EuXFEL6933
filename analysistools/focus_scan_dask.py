@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, progress
-from dask import delayed
+import dask.array as da
 import sys
 sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import data_helper as dh
@@ -31,8 +31,10 @@ import time
 
 
 def compute_average(img, flag_dict, xgm_9):
-    #return (img.sel(flag_dict)*(1/np.array(xgm_9))[:, np.newaxis, np.newaxis]).mean('train_pulse')
-    return img.sel(flag_dict).mean('train_pulse')
+    xgm_9=xgm_9[None, :, None, None]
+    print(img.shape, xgm_9.shape, flush=True)
+    return (img.sel(flag_dict)*(1/xgm_9)).mean('train_pulse')
+    #return img.sel(flag_dict).mean('train_pulse')
 
 path = dh.expPath+'Results/FocusScans/DataDask/'
 
@@ -120,7 +122,8 @@ class Analysis:
                         result.append(row['pulse_energy_xgm9'])
                     used_shots+=len(train_df)
                 self._xgm_9.append(result)
-        
+        self._xgm_9=np.array(self._xgm_9)
+        self._xgm_9 = da.from_array(self._xgm_9, chunks=self._xgm_9.shape)
         return self._xgm_9
         
     @property
@@ -180,7 +183,7 @@ def main(run=None, flag_num=1, nshot=200):
     'local_directory': '/scratch',
     'processes': 16,
     'cores': 16,
-    'memory': '512GB',
+    'memory': '256GB',
     'log_directory': log_directory,  # Set the log directory
     }
 
@@ -219,6 +222,7 @@ def main(run=None, flag_num=1, nshot=200):
             ret_dict['photon_energy'] = energy
             ret_dict['inj_pos_z'] = new_pos_list
             ret_dict['run']=run
+            ret_dict['xgm_9']=analysis[i].xgm_9[j]
             ret_dict['f_yield_ROI0'] = [float(np.mean(results[i][j]*mask)) for j in range(len(results[i]))]
             i+=1
             df_ret = pd.DataFrame(ret_dict)
