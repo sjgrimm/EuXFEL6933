@@ -252,12 +252,14 @@ def getImage(run, t_id, p_id):
     -------
     The image which corresponds to the run, train and pulse number
     '''
-    ds = ex.open_run(proposal=proposal, run=run)
-    sel = ds.select(det['agipd'])
+    ds = ex.open_run(proposal=dh.proposal, run=run)
+    sel = ds.select(dh.det['agipd'])
     t_id, t_data = sel.train_from_id(t_id)
-    data = stack_agipd_dict(t_data)
+    data = dh.stack_agipd_dict(t_data)
+    pulse_ids = data['image.pulseId']
     images = data['image.data']
-    return images[p_id]
+    index = np.where(pulse_ids==p_id)[0][0]
+    return images[index]
 
 #---------------------------------------------------------------------------------------------------------------
 ####################
