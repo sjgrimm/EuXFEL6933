@@ -70,7 +70,7 @@ det = {
     #'inj_cam_down': 'SPB_EXP_ZYLA/CAM/1:daqOutput',              # Injector nozzle camera
     #'inj_cam_up': 'SPB_IRU_AEROSOL/CAM/CAM_1:daqOutput',         # Injector nozzle camera
     'hitfinder': 'SPB_DET_AGIPD1M-1/REDU/SPI_HITFINDER:output',  # Flags the hits
-    'frames': 'SPB_IRU_AGIPD1M1/REDU/LITFRM:output',
+    'frames': 'SPB_IRU_AGIPD1M1/REDU/LITFRM:output',             # XGM2 values with pulseId
     #'test1': 'SPB_EHD_IBS/CAM/1:daqOutput',             # doesn't work
     #'test3': 'SPB_IRU_AGIPD1M1/REDU/LITFRM:output',     # weird
     #'test4': 'ACC_SYS_DOOCS/CTRL/BEAMCONDITIONS'        # kParameter
@@ -252,10 +252,10 @@ def getImage(run, t_id, p_id):
     -------
     The image which corresponds to the run, train and pulse number
     '''
-    ds = ex.open_run(proposal=dh.proposal, run=run)
-    sel = ds.select(dh.det['agipd'])
+    ds = ex.open_run(proposal=proposal, run=run)
+    sel = ds.select(det['agipd'])
     t_id, t_data = sel.train_from_id(t_id)
-    data = dh.stack_agipd_dict(t_data)
+    data = stack_agipd_dict(t_data)
     pulse_ids = data['image.pulseId']
     images = data['image.data']
     index = np.where(pulse_ids==p_id)[0][0]
@@ -578,3 +578,190 @@ def mask_full_fluor(bad=False):
         mask = ~bad_pixel
 
     return mask
+
+def getTileCorners(module, tile):
+    '''
+    Module layout:
+            
+        plot_data:  12 | 0   imshow:  7 | 11
+                    13 | 1            6 | 10
+                    14 | 2            5 |  9
+                    15 | 3            4 |  8
+                    ---+---          ---+---
+                     8 | 4            3 | 15
+                     9 | 5            2 | 14
+                    10 | 6            1 | 13
+                    11 | 7            0 | 12
+    
+    Coordinates of the module edges in the assembled image: 
+    (*: not all tiles have the same vertical position)
+    
+    7: (  88,  7) | (  88,532)     11: (   0, 546) | (   0,1071)
+       -----------+-----------         ------------+------------
+       ( 215,  7) | ( 215,532)         ( 127, 546) | ( 127,1071)
+    
+    6: ( 231,  1) | ( 231,526)     10: ( 152, 547) | ( 152,1072)
+       -----------+-----------         ------------+------------
+       ( 358,  1) | ( 215,526)         ( 279, 547) | ( 279,1072)
+    
+    5: ( 386,  0) | ( 388,525)      9: ( 308, 547) | ( 310,1072)
+    *  -----------+-----------      *  ------------+------------
+       ( 513,  0) | ( 515,525)         ( 435, 547) | ( 437,1072)
+    
+    4: ( 544,  0) | ( 545,525)      8: ( 466, 546) | ( 467,1071)
+    *  -----------+-----------      *  ------------+------------
+       ( 671,  0) | ( 672,525)         ( 593, 546) | ( 594,1071)
+    
+    3: ( 706, 16) | ( 709,541)     15: ( 626, 567) | ( 628,1092)
+    *  -----------+-----------      *  ------------+------------
+       ( 833, 16) | ( 836,541)         ( 753, 567) | ( 755,1092)
+    
+    2: ( 863, 16) | ( 866,541)     14: ( 782, 567) | ( 785,1092)
+    *  -----------+-----------      *  ------------+------------
+       ( 990, 16) | ( 993,541)         ( 909, 567) | ( 912,1092)
+    
+    1: (1020, 16) | (1021,541)     13: ( 939, 567) | ( 941,1092)
+    *  -----------+-----------      *  ------------+------------
+       (1147, 16) | (1148,541)         (1066, 567) | (1068,1092)
+    
+    0: (1178, 16) | (1178,541)     12: (1089, 563) | (1093,1088)
+       -----------+-----------      *  ------------+------------
+       (1305, 16) | (1305,541)         (1216, 563) | (1220,1088)
+
+    Returns
+    -------
+    Always the upper left corner of the given tile in the given module.
+    '''
+    # tiles:                     0            1            2            3            4            5            6            7   | modules
+    edges = np.array([[[1178,   16],[1178,   82],[1178,  148],[1178,  214],[1178,  280],[1178,  346],[1178,  412],[1178,  478]],# 0
+                      [[1020,   16],[1020,   82],[1020,  148],[1020,  214],[1021,  280],[1021,  346],[1021,  412],[1021,  478]],# 1
+                      [[ 863,   16],[ 863,   82],[ 864,  148],[ 864,  214],[ 865,  280],[ 865,  346],[ 866,  412],[ 866,  478]],# 2
+                      [[ 706,   16],[ 706,   82],[ 707,  148],[ 707,  214],[ 707,  280],[ 708,  346],[ 708,  412],[ 709,  478]],# 3
+                      [[ 544,    0],[ 544,   66],[ 544,  132],[ 544,  198],[ 545,  264],[ 545,  330],[ 545,  396],[ 545,  462]],# 4
+                      [[ 386,    0],[ 387,   66],[ 387,  132],[ 387,  198],[ 387,  264],[ 388,  330],[ 388,  396],[ 388,  462]],# 5
+                      [[ 231,    1],[ 231,   67],[ 231,  133],[ 231,  199],[ 231,  265],[ 231,  331],[ 231,  397],[ 231,  463]],# 6
+                      [[  88,    7],[  88,   73],[  88,  139],[  88,  205],[  88,  271],[  88,  337],[  88,  403],[  88,  469]],# 7
+                      [[ 466,  546],[ 466,  612],[ 466,  678],[ 466,  744],[ 466,  810],[ 467,  876],[ 467,  942],[ 467, 1008]],# 8
+                      [[ 308,  547],[ 308,  613],[ 309,  679],[ 309,  745],[ 309,  811],[ 309,  877],[ 309,  943],[ 310, 1009]],# 9
+                      [[ 152,  547],[ 152,  613],[ 152,  679],[ 152,  745],[ 152,  811],[ 152,  877],[ 152,  943],[ 152, 1009]],#10
+                      [[   0,  546],[   0,  612],[   0,  678],[   0,  744],[   0,  810],[   0,  876],[   0,  942],[   0, 1008]],#11
+                      [[1089,  563],[1090,  629],[1090,  695],[1091,  761],[1091,  827],[1092,  893],[1093,  959],[1093, 1025]],#12
+                      [[ 939,  567],[ 939,  633],[ 940,  699],[ 940,  765],[ 940,  831],[ 941,  897],[ 941,  963],[ 941, 1029]],#13
+                      [[ 782,  567],[ 783,  633],[ 783,  699],[ 784,  765],[ 784,  831],[ 784,  897],[ 785,  963],[ 785, 1029]],#14
+                      [[ 626,  567],[ 627,  633],[ 627,  699],[ 627,  765],[ 627,  831],[ 628,  897],[ 628,  963],[ 628, 1029]],#15
+                     ], dtype=int)
+    
+    return edges[module][tile]
+
+def assembleImage(not_assembled_image):
+    '''
+    Parameter
+    ---------
+    not_assembled_image : ndarray
+        The not assembled image with shape (16, 512, 128)
+
+    Returns
+    -------
+    The assebled image with shape (1306, 1093)
+    '''
+    ret_img = np.zeros((1306, 1093))
+    
+    for m_nr, module in enumerate(not_assembled_image):
+        
+        trafo = np.rot90(module, axes=(0, 1)) if m_nr<8 else np.rot90(module, axes=(1, 0))
+        
+        for t_nr in range(8):
+            ref_y, ref_x = getTileCorners(m_nr, t_nr)
+            ret_img[ref_y:ref_y+128, ref_x:ref_x+64] = trafo[:,t_nr*64:(t_nr+1)*64]
+
+    return ret_img
+
+def imageCoordinate(coordinate, module):
+    '''
+    Parameter
+    ---------
+    coordinate : list(int, int)
+        The list of coordinates (y, x)
+    module : int
+        The module number
+
+    Returns
+    -------
+    The coordinate in the 2d image of the given 3d coordinates.
+    '''
+    [y_index, x_index] = coordinate
+
+    if module<8:
+        y_trafo = 127-x_index
+        x_trafo = y_index
+    else:
+        y_trafo = x_index
+        x_trafo = 511-y_index
+
+    t_nr = int(x_trafo/64)
+    ref_y, ref_x = getTileCorners(module, t_nr)
+
+    new_y = ref_y + y_trafo
+    new_x = ref_x + x_trafo
+    
+    return [new_y, new_x]
+
+# Reference image to identify the module for a given image coordinate
+ones = np.ones((512, 128), dtype=int)
+ref_modules = np.asarray([ones+i for i in range(16)])
+ass_ref_modules = assembleImage(ref_modules)
+
+def stackCoordinate(coordinate):
+    '''
+    Parameter
+    ---------
+    coordinate : list(int, int)
+        The coordinates from the 2d image.
+
+    Returns
+    -------
+    The coordinates in the 3d stack of modules.
+    '''
+    [y_index, x_index] = coordinate
+    
+    m_nr = int(ass_ref_modules[y_index][x_index]-1)
+    ref_y, ref_x = getTileCorners(m_nr, 0)
+    module_x_index = x_index - ref_x
+    t_nr = int(module_x_index/66)# tile_width + gap_width = 64 + 2 = 66
+    
+    ref_y, ref_x = getTileCorners(m_nr, t_nr)
+    y_index = y_index-ref_y
+    x_index = (x_index-ref_x)+t_nr*64
+
+    if m_nr<8:
+        y_trafo = x_index
+        x_trafo = 127-y_index
+    else:
+        y_trafo = 511-x_index
+        x_trafo = y_index
+        
+    return [y_trafo, x_trafo], m_nr
+
+def assembleStack(image):
+    '''
+    Parameter
+    ---------
+    image : ndarray
+        The input image with shape (1306, 1093).
+
+    Returns
+    -------
+    The stack of modules extracted from the given image with shape (16, 512, 128).
+    '''
+    stack = []
+
+    for m_nr in range(16):
+        module = np.zeros((128, 512))
+        for t_nr in range(8):
+            ref_y, ref_x = getTileCorners(m_nr, t_nr)
+            module[:,t_nr*64:(t_nr+1)*64] = image[ref_y:ref_y+128, ref_x:ref_x+64]
+
+        trafo = np.rot90(module, axes=(0, 1)) if m_nr>=8 else np.rot90(module, axes=(1, 0))
+        stack.append(trafo)
+
+    return np.asanyarray(stack)
