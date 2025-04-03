@@ -702,7 +702,7 @@ def imageCoordinate(coordinate, module):
     ref_y, ref_x = getTileCorners(module, t_nr)
 
     new_y = ref_y + y_trafo
-    new_x = ref_x + x_trafo
+    new_x = ref_x + x_trafo-t_nr*64
     
     return [new_y, new_x]
 
