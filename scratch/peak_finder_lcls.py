@@ -4,7 +4,7 @@ Created on Friday 28.02.2025
 @author: Jan Niklas Leutloff
 
 import sys
-sys.path.append('gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools/')
+sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/scratch')
 import peak_finder as pf
 
 This file includes the following functions:
