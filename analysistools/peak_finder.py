@@ -37,10 +37,10 @@ cmap.set_under(color='black')  # Color for values below vmin (black)
 cmap.set_bad(color='black')
 
 #------------------------
-# PeakFinder: VERSION 2.0
+# PeakFinder: VERSION 4.0
 #------------------------
 
-def mask_peak_env(r0=30, dr=6):
+def mask_peak_env(r0=28, dr=7):
     '''
     dr: thickness of the ring
     r0: radius of the circle if dr==0 or the inner radius of the ring if dr!=0
@@ -62,13 +62,16 @@ def mask_peak_env(r0=30, dr=6):
     return ring_sel
 
 
-def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer_mask, r0, dr, snr_min, run, t_id, p_id, mini_verbose, verbose):
+def peak_finder_subdet(img, module, threshold, 
+                       npix_min, rank, inner_mask, outer_mask, r0, dr, snr_min, dist_min, exclude_border, 
+                       run, t_id, p_id, mini_verbose, verbose):
+    
     ret_dict = {'run': run, 'trainId': t_id, 'pulseId': p_id, 'module': module, 'peak_pos_cm': [], 'peak_pos': [],
                 'snr': [], 'npix': [], 'integrated': [], 'intensityPerPixel': [], 'peak_env_threshold': []}
 
-                                                                        # To exclude the bright row/colomn
-                                            #21                         # at the border of the img array 
-    peaks = peak_local_max(img, min_distance=15, threshold_abs=threshold, exclude_border=1)#rank+1
+                                            #21 at LCLS              # To exclude the bright row/colomn
+                                            #12 at XFEL              # at the border of the img array set it to 1
+    peaks = peak_local_max(img, min_distance=dist_min, threshold_abs=threshold, exclude_border=exclude_border)
     if verbose: print('Number of peaks in module {}: {}'.format(module, len(peaks)))
 
     img_shape = img.shape
@@ -79,10 +82,10 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
         y = p[0]
         
         # The numbers on the left side are given by the shape of the given image
-        x_min_rank = x-rank if x-rank>0 else 0           #np.max([0, x-rank])
-        x_max_rank = x+rank+1 if x+rank+1<img_shape[1] else img_shape[1] #np.min([1024, x+rank+1])
-        y_min_rank = y-rank if y-rank>0 else 0           #np.max([0, y-rank])
-        y_max_rank = y+rank+1 if y+rank+1<img_shape[0] else img_shape[0] #np.min([512, y+rank+1])
+        x_min_rank = x-rank if x-rank>0 else 0
+        x_max_rank = x+rank+1 if x+rank+1<img_shape[1] else img_shape[1]
+        y_min_rank = y-rank if y-rank>0 else 0
+        y_max_rank = y+rank+1 if y+rank+1<img_shape[0] else img_shape[0]
         
         peak_env = np.asarray(img[y_min_rank:y_max_rank, x_min_rank:x_max_rank], dtype=float)
         new_peak_env = np.copy(peak_env)
@@ -110,8 +113,8 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
         new_peak_env[new_peak_env<peak_env_threshold]=0
         
         labeled_peak_env, _ = nd.label(new_peak_env, structure=getStructure())      # 247 µs ± 2.86 µs
-        x_in_peak_env = x if x<rank else rank       #np.min([x, rank])
-        y_in_peak_env = y if y<rank else rank       #np.min([y, rank])
+        x_in_peak_env = x if x<rank else rank
+        y_in_peak_env = y if y<rank else rank
         peak_label = labeled_peak_env[y_in_peak_env, x_in_peak_env]
         if peak_label==0: 
             if verbose: print('Not choosen:', p, module)
@@ -133,10 +136,10 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
             y = actual_peak[0]
             
             # The numbers on the left side are given by the shape of the given image
-            x_min_r0 = x-r0 if x-r0>0 else 0           #np.max([0, x-r0])
-            x_max_r0 = x+r0+1 if x+r0+1<img_shape[1] else img_shape[1] #np.min([1024, x+r0+1])
-            y_min_r0 = y-r0 if y-r0>0 else 0           #np.max([0, y-r0])
-            y_max_r0 = y+r0+1 if y+r0+1<img_shape[0] else img_shape[0] #np.min([512, y+r0+1])
+            x_min_r0 = x-r0 if x-r0>0 else 0
+            x_max_r0 = x+r0+1 if x+r0+1<img_shape[1] else img_shape[1]
+            y_min_r0 = y-r0 if y-r0>0 else 0
+            y_max_r0 = y+r0+1 if y+r0+1<img_shape[0] else img_shape[0]
 
             r0_env = np.copy(img[y_min_r0:y_max_r0, x_min_r0:x_max_r0])
             r0_mask = np.copy(inner_mask[r0-(y-y_min_r0):r0+(y_max_r0-y), r0-(x-x_min_r0):r0+(x_max_r0-x)])
@@ -144,18 +147,21 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
             r1 = r0 + dr
             
             # The numbers on the left side are given by the shape of the given image
-            x_min_r1 = x-r1 if x-r1>0 else 0           #np.max([0, x-r1])
-            x_max_r1 = x+r1+1 if x+r1+1<img_shape[1] else img_shape[1] #np.min([1024, x+r1+1])
-            y_min_r1 = y-r1 if y-r1>0 else 0           #np.max([0, y-r1])
-            y_max_r1 = y+r1+1 if y+r1+1<img_shape[0] else img_shape[0] #np.min([512, y+r1+1])
+            x_min_r1 = x-r1 if x-r1>0 else 0
+            x_max_r1 = x+r1+1 if x+r1+1<img_shape[1] else img_shape[1]
+            y_min_r1 = y-r1 if y-r1>0 else 0
+            y_max_r1 = y+r1+1 if y+r1+1<img_shape[0] else img_shape[0]
             
             r1_env = np.copy(img[y_min_r1:y_max_r1, x_min_r1:x_max_r1])
             r1_mask = np.copy(outer_mask[r1-(y-y_min_r1):r1+(y_max_r1-y), r1-(x-x_min_r1):r1+(x_max_r1-x)])
             
             r0_env *= r0_mask
             r1_env *= r1_mask
+
+            signal = np.mean(r0_env)
+            noise = np.mean(r1_env)
             
-            snr = np.mean(r0_env, where=r0_env!=0)/np.mean(r1_env, where=r1_env!=0)
+            snr = signal/(1e-3) if (noise==0) | (np.isnan(noise)) else signal/noise
             
             if snr>=snr_min:
                 integrated = nd.sum_labels(peak_env, labels=labeled_peak_env, index=peak_label)
@@ -163,14 +169,15 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
 
                 ret_dict['peak_pos_cm'].append(np.asarray(actual_peak, dtype=int))
                 ret_dict['peak_pos'].append(np.asarray(p, dtype=int))
-                ret_dict['snr'].append(np.round(snr, 4))
+                ret_dict['snr'].append(np.round(snr, 2))
                 ret_dict['npix'].append(npix)
                 ret_dict['integrated'].append(int(np.round(integrated, 0)))
                 ret_dict['intensityPerPixel'].append(np.round(intensityPerPixel, 2))
                 ret_dict['peak_env_threshold'].append(peak_env_threshold)
 
                 if verbose | mini_verbose:
-                    print(actual_peak, np.round(snr, 4), npix, int(np.round(integrated, 0)), np.round(intensityPerPixel, 2), p, peak_env_threshold)
+                    print(actual_peak, np.round(snr, 2), npix, int(np.round(integrated, 0)), np.round(intensityPerPixel, 2), 
+                          p, peak_env_threshold)
                     print(npix_min, rel_size)
             
         elif verbose: print('Not choosen:', p, module, npix)
@@ -182,16 +189,18 @@ def peak_finder_subdet(img, module, threshold, npix_min, rank, inner_mask, outer
     
     return ret_df
 
-def advancedPeakFinder_img(img, mask, npix_min=64, rank=50, r0=30, dr=6, snr_min=1.05, run=-1, t_id=-1, p_id=-1, 
+def advancedPeakFinder_img(img, mask, 
+                           npix_min=64, rank=50, r0=28, dr=7, snr_min=5, dist_min=12, exclude_border=0, 
+                           run=-1, t_id=-1, p_id=-1, 
                            plot=False, mini_verbose=False, verbose=False, debug=0):
     '''
-    !!! You should use at least as many CPUs as there are detector modules !!!
+    !!! You should use at least as many CPUs as there are detector modules if you want to use multiprocessing !!!
     
-    Identifies the peaks in the panels of a given imgib-array within the following steps:
-    1. Apply peak_local_max to image
-    2. Create peak_env around found peaks
+    Identifies the peaks in the panels of a given module-stack-array within the following steps:
+    1. Apply peak_local_max to every module in the stack using peak_finder_subdet
+    2. Create peak_env around the peaks found
     3. Set all pixel which are below a threshold to zero
-    4. Apply label to peak_env
+    4. Apply nd.label to peak_env
     5. If the labeled area is larger than npix_min keep the peak
     6. Use center_of_gravity to calculate the actual peak position
     7. Check snr>snr_min
@@ -199,40 +208,43 @@ def advancedPeakFinder_img(img, mask, npix_min=64, rank=50, r0=30, dr=6, snr_min
     Parameters
     ----------
     img : numpy.ndarray
-        Input data representing a 2d image to be analyzed.
+        Input data representing a 3d module-stack-array to be analyzed.
         
     mask : numpy.ndarray
-        Same shape of the input array that mask all bad pixels and
+        Same shape as the input array that mask all bad pixels and
         also the area in which no peaks should be searched
-        
-    amp : float, optional
-        Defines the threshold intensity of the peaks. Default is 14.
     
     npix_min : int, optional
-        Number of pixels making up the peak. Default is 324.
+        Number of pixels making up the peak. Default is 64.
         
     rank : int, optional
         Defines a region around the peak in which nd.label is used to 
-        find the pixels which contribute to the peak.
-        Default is 80.
+        find the pixels which contribute to the peak. Default is 50.
         
     r0 : float, optional
     dr : float, optional
         Parameters r0 and dr evaluate the snr of a peak.
-        Default of r0 is 42.
-        Default of dr is 6.
+        Default of r0 is 28. Default of dr is 7.
         
     snr_min : float, optional
-        Minimum snr the peaks have to fulfill. Default is 1.55.
+        Minimum snr the peaks have to fulfill. Default is 5.
 
-    run, tag : int, optional
-        Run and event number under which the data is saved in a pd.DataFrame
+    dist_min : int, optional
+        The minimal allowed distance separating peaks. Default is 12.
+
+    exclude_border : int, optional
+        If exclude_border>0 peaks from within exclude_border-pixels of the 
+        border of the image are excluded. If exclude_border=0 peaks are identified 
+        regardless of their distance from the border. Default is 0.
+
+    run, t_id, p_id : int, optional
+        Run, train and pulse number under which the data is saved in a pd.DataFrame.
+        Default is -1.
 
     Returns
     -------
-    List of peaks.
-    Each enty consists of the peak position,
-    the snr and npix of the peak.
+    A pd.DataFrame which contains the following information:
+    run, t_id, p_id, module, peak_pos_cm, peak_pos, snr, npix, integrated, intensityPerPixel, peak_env_threshold
     '''
     
     masked_img = img * mask
@@ -246,7 +258,9 @@ def advancedPeakFinder_img(img, mask, npix_min=64, rank=50, r0=30, dr=6, snr_min
 
     par_list = []
     for module, subdet in enumerate(masked_img):
-        par_list.append([subdet, module, threshold, npix_min, rank, inner_mask, outer_mask, r0, dr, snr_min, run, t_id,  p_id, mini_verbose, verbose])
+        par_list.append([subdet, module, threshold, 
+                         npix_min, rank, inner_mask, outer_mask, r0, dr, snr_min, dist_min, exclude_border, 
+                         run, t_id,  p_id, mini_verbose, verbose])
 
     if False:
         with Pool(processes=16, maxtasksperchild=1) as pool:
@@ -273,7 +287,7 @@ def advancedPeakFinder_img(img, mask, npix_min=64, rank=50, r0=30, dr=6, snr_min
         fig.colorbar(tmp0, cax=cax0)
         plt.show()
 
-    if False:
+    if False: # To plot the peaks on the detector in real units (meter)
         geom = dh.getGeometry(run)
         fig, ax = plt.subplots(dpi=150)
         cmap = plt.get_cmap('inferno')
@@ -299,8 +313,8 @@ def getStructure(struc: str='default'):
     else:
         return np.array([[0,1,0],[1,1,1],[0,1,0]], dtype=int)
 
-def test_peak_env(img, mask, peak, m_nr, rank=50, npix_min=10):
-    #peak, m_nr = [508, 18],4 #dh.stackCoordinate([695, 917])#[166, 27],2 #
+def test_peak_env(img, mask, peak, m_nr, rank=50, npix_min=64, snr_min=1.05, r0=30, dr=6, before=False):
+
     image = img*mask
     total_mean = image.mean()
     total_std = image.std()
@@ -350,7 +364,7 @@ def test_peak_env(img, mask, peak, m_nr, rank=50, npix_min=10):
     peak_value = img[y][x]
     print('peak value: {}'.format(peak_value))
     
-    peak_env_1d = new_peak_env.reshape(-1)             # 261 ns ± 9.17 ns
+    peak_env_1d = peak_env.reshape(-1)             # 261 ns ± 9.17 ns
     
     # Look only at the current peak if there are other more intense peaks in the peak_env
     if peak_env_1d.max()!=peak_value:
@@ -401,3 +415,50 @@ def test_peak_env(img, mask, peak, m_nr, rank=50, npix_min=10):
         npix_min = int( npix_min * (rel_size)**(1/6) )
         print('Size of the peak env: {}'.format(int(rel_size*(2*rank+1)**2)))
         print('New npix_min {} for peak {}'.format(npix_min, peak))
+
+    if npix >= npix_min:
+
+        inner_mask = mask_peak_env(r0=r0, dr=0)
+        outer_mask = mask_peak_env(r0=r0, dr=dr)
+        
+        cm_in_peak_env = np.asarray(np.round(nd.center_of_mass(peak_env, labeled_peak_env, peak_label)), dtype=int)
+        
+        actual_peak = [cm_in_peak_env[0] + y_min_rank, cm_in_peak_env[1] + x_min_rank]
+        
+        x = actual_peak[1]
+        y = actual_peak[0]
+        
+        # The numbers on the left side are given by the shape of the given image
+        x_min_r0 = x-r0 if x-r0>0 else 0           #np.max([0, x-r0])
+        x_max_r0 = x+r0+1 if x+r0+1<img_shape[1] else img_shape[1] #np.min([1024, x+r0+1])
+        y_min_r0 = y-r0 if y-r0>0 else 0           #np.max([0, y-r0])
+        y_max_r0 = y+r0+1 if y+r0+1<img_shape[0] else img_shape[0] #np.min([512, y+r0+1])
+    
+        r0_env = np.copy(img[y_min_r0:y_max_r0, x_min_r0:x_max_r0])
+        r0_mask = np.copy(inner_mask[r0-(y-y_min_r0):r0+(y_max_r0-y), r0-(x-x_min_r0):r0+(x_max_r0-x)])
+    
+        r1 = r0 + dr
+        
+        # The numbers on the left side are given by the shape of the given image
+        x_min_r1 = x-r1 if x-r1>0 else 0           #np.max([0, x-r1])
+        x_max_r1 = x+r1+1 if x+r1+1<img_shape[1] else img_shape[1] #np.min([1024, x+r1+1])
+        y_min_r1 = y-r1 if y-r1>0 else 0           #np.max([0, y-r1])
+        y_max_r1 = y+r1+1 if y+r1+1<img_shape[0] else img_shape[0] #np.min([512, y+r1+1])
+        
+        r1_env = np.copy(img[y_min_r1:y_max_r1, x_min_r1:x_max_r1])
+        r1_mask = np.copy(outer_mask[r1-(y-y_min_r1):r1+(y_max_r1-y), r1-(x-x_min_r1):r1+(x_max_r1-x)])
+        
+        r0_env *= r0_mask
+        r1_env *= r1_mask
+
+        if before:
+            signal = np.mean(r0_env, where=r0_env!=0)
+            noise = np.mean(r1_env, where=r1_env!=0)
+        else:
+            signal = np.mean(r0_env)
+            noise = np.mean(r1_env)
+            
+        print(signal, noise)
+        
+        snr = signal/1e-3 if (noise==0) | (np.isnan(noise)) else signal/noise
+        print(snr)
