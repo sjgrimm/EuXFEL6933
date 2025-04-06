@@ -8,11 +8,11 @@ sys.path.append('/gpfs/exfel/exp/SPB/202501/p006933/usr/Software/analysistools')
 import peak_finder as pf
 
 This file includes the following functions:
- - getMask
  - mask_peak_env
- - getCornerMean
- - bgr_adjustment
+ - peak_finder_subdet
  - advancedPeakFinder_img
+ - getStructure
+ - test_peak_env
 '''
 
 import sys
@@ -70,7 +70,7 @@ def peak_finder_subdet(img, module, threshold,
                 'snr': [], 'npix': [], 'integrated': [], 'intensityPerPixel': [], 'peak_env_threshold': []}
 
                                             #21 at LCLS              # To exclude the bright row/colomn
-                                            #12 at XFEL              # at the border of the img array set it to 1
+                                            #15 at XFEL              # at the border of the img array set it to 1
     peaks = peak_local_max(img, min_distance=dist_min, threshold_abs=threshold, exclude_border=exclude_border)
     if verbose: print('Number of peaks in module {}: {}'.format(module, len(peaks)))
 
@@ -190,7 +190,7 @@ def peak_finder_subdet(img, module, threshold,
     return ret_df
 
 def advancedPeakFinder_img(img, mask, 
-                           npix_min=64, rank=50, r0=28, dr=7, snr_min=5, dist_min=12, exclude_border=0, 
+                           npix_min=64, rank=50, r0=28, dr=7, snr_min=5, dist_min=15, exclude_border=0, 
                            run=-1, t_id=-1, p_id=-1, 
                            plot=False, mini_verbose=False, verbose=False, debug=0):
     '''
@@ -230,7 +230,7 @@ def advancedPeakFinder_img(img, mask,
         Minimum snr the peaks have to fulfill. Default is 5.
 
     dist_min : int, optional
-        The minimal allowed distance separating peaks. Default is 12.
+        The minimal allowed distance separating peaks. Default is 15.
 
     exclude_border : int, optional
         If exclude_border>0 peaks from within exclude_border-pixels of the 
@@ -386,7 +386,6 @@ def test_peak_env(img, mask, peak, m_nr, rank=50, npix_min=64, snr_min=1.05, r0=
     rel_size = new_peak_env.size/(2*rank + 1)**2
     peak_env_threshold = int( mean + 1)
     print('Threshold: {}'.format(peak_env_threshold))
-    
     
     new_peak_env[new_peak_env<peak_env_threshold]=0
     
