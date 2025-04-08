@@ -15,6 +15,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+import h5py
 from multiprocessing import Pool
 
 from tqdm import tqdm
@@ -536,17 +537,28 @@ def run_format(run):
     '''
     return '{0:04d}'.format(run)
 
+def getBadPixelMask(mask_tile_edges=False):
+
+    with h5py.File(expPath+'Shared/geom/mask_hvoff_20250311.h5', 'r') as f:
+        bad_pixel = f['entry_1/data_1/mask'][:].astype(bool)
+
+    if mask_tile_edges:
+        for module in bad_pixel:
+            # Rows
+            for row in np.concatenate((np.arange(0, 512, 64), np.arange(63, 512, 64))):
+                module[row, :] = True
+                
+            # Columns
+            module[:, 0] = True
+            module[:, -1] = True
+
+    return ~bad_pixel
+
 def mask_full_fluor(bad=False):
     '''
-    Parameter
-    ---------
-    bad : bool, optional
-        If True only the bad pixel mask is returned.
-        Otherwise (default: False) the mask for the fluorescence is returned.
-
     Returns
     -------
-    The mask for the fluorescence or the bad pixels (shape: 16, 512, 128).
+    The mask for the fluorescence (shape: 16, 512, 128).
 
     Module layout:
         
@@ -560,22 +572,16 @@ def mask_full_fluor(bad=False):
                 10 | 6            1 | 13
                 11 | 7            0 | 12
     '''
-    import h5py
-    with h5py.File(expPath+'Shared/geom/mask_hvoff_20250311.h5', 'r') as f:
-        bad_pixel = f['entry_1/data_1/mask'][:].astype(bool)
+    bad_pixel = getBadPixelMask()
 
-    if not bad:
-        mask = np.zeros((16, 512, 128))
-        mask[7][64:192, 0:128]=1
-        mask[7][256:512, 0:128]=1
-        mask[1][0:128, 0:128]=1
-        mask[10][0:128, 0:128]=1
-        mask[11][256:512, 0:128]=1
-        mask[12][64:192, 0:128]=1
-        mask = mask.astype(bool)
-        mask = ~bad_pixel*mask
-    else:
-        mask = ~bad_pixel
+    mask = np.zeros((16, 512, 128))
+    mask[7][64:192, 0:128]=1
+    mask[7][256:512, 0:128]=1
+    mask[1][0:128, 0:128]=1
+    mask[10][0:128, 0:128]=1
+    mask[11][256:512, 0:128]=1
+    mask[12][64:192, 0:128]=1
+    mask = mask.astype(bool)
 
     return mask
 
