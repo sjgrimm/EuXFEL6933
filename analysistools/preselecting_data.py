@@ -17,10 +17,6 @@ class Run():
         self.geom = dh.getGeometry(self.run_number)
         
         if not trainwise:
-            self.run_number = run_number
-            self.proposal = proposal
-            self.data_source = dh.data_source(self.run_number)
-            self.train_data = self.getTrainData()
             self.pulse_data = self.getPulseData()                            #flag==[0, 1]
             self.reduced_pulse_data = self.getReducedPulseData()             #flag==1
             self.bad_pulse_data = self.getBadPulseData()                     #flag==0
